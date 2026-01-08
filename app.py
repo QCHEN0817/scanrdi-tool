@@ -150,7 +150,8 @@ if selection == "ScanRDI":
     if 'narrative_summary' not in st.session_state: st.session_state.narrative_summary = ""
     if 'em_details' not in st.session_state: st.session_state.em_details = ""
 
-    if st.button("🪄 Auto-Generate All Narratives"):
+    if st.button("🪄 Auto-Generate Narratives"):
+        # Hidden Equipment Summary generation
         st.session_state.equipment_summary = (
             f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} "
             f"(Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} "
@@ -158,17 +159,25 @@ if selection == "ScanRDI":
             f"(Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         )
         
+        # New combined Narrative logic for "No Growth"
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
-            st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates."
-            st.session_state.em_details = "Weekly active air sampling and weekly surface sampling from both the week of testing and the week before testing showed no microbial growth."
+            st.session_state.narrative_summary = (
+                "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), "
+                "surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling from both the week of testing and the week "
+                "before testing showed no microbial growth."
+            )
+            st.session_state.em_details = ""  # Clear em_details if no hits
         else:
             st.session_state.narrative_summary = "Microbial growth was observed during environmental monitoring as detailed in Table 1."
             st.session_state.em_details = "Growth details are documented in the attached reports."
         st.rerun()
 
-    data["equipment_summary"] = st.text_area("Equipment Summary", value=st.session_state.equipment_summary, height=100)
-    data["narrative_summary"] = st.text_area("Narrative Summary", value=st.session_state.narrative_summary, height=100)
-    data["em_details"] = st.text_area("EM Details", value=st.session_state.em_details, height=100)
+    # Pass the value directly to the data dict without showing the UI element
+    data["equipment_summary"] = st.session_state.equipment_summary
+    
+    # Only show the narrative and detail fields
+    data["narrative_summary"] = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=150)
+    data["em_details"] = st.text_area("EM Details (Editable)", value=st.session_state.em_details, height=100)
 
 # --- FINAL GENERATION ---
 if st.button("🚀 GENERATE FINAL REPORT"):
