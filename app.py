@@ -43,7 +43,7 @@ field_keys = [
     "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air_weekly", 
     "id_air_weekly", "obs_room", "etx_room_weekly", "id_room_weekly", "weekly_init", 
     "date_weekly", "equipment_summary", "narrative_summary", "em_details", 
-    "sample_history_para"
+    "sample_history_para", "incidence_count", "oos_refs"
 ]
 
 for k in field_keys:
@@ -52,6 +52,7 @@ for k in field_keys:
     elif k == "sample_id": init_state(k, "E12955")
     elif k == "test_date": init_state(k, datetime.now().strftime("%d%b%y"))
     elif k == "dosage_form": init_state(k, "Injectable")
+    elif k == "incidence_count": init_state(k, 0)
     elif "etx" in k or "id" in k: init_state(k, "N/A")
     else: init_state(k, "")
 
@@ -183,12 +184,25 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.date_weekly = st.text_input("Date of Weekly Monitoring", st.session_state.date_weekly)
 
     st.header("4. Automated Summaries")
+    
+    # NEW: Sample History Input Boxes
+    h1, h2 = st.columns(2)
+    with h1:
+        st.session_state.incidence_count = st.number_input("Number of Prior Failures (Incidences)", value=int(st.session_state.incidence_count), step=1)
+    with h2:
+        st.session_state.oos_refs = st.text_input("Related OOS Numbers (e.g. OOS-252303, OOS-252384)", st.session_state.oos_refs)
+
     if st.button("🪄 Auto-Generate All"):
         # Equipment Summary
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {analyst_full} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {changeover_full}."
         
-        # History Paragraph (Updated Template for failures)
-        st.session_state.sample_history_para = f"Analyzing a 6-month sample history for {st.session_state.client_name} ({st.session_state.sample_id}), this specific analyte “{st.session_state.sample_name}” has had no prior failures using the Scan RDI method during this period."
+        # History Logic
+        if st.session_state.incidence_count > 0:
+            hist_result = f"had {st.session_state.incidence_count} incidences of positive results ({st.session_state.oos_refs})"
+        else:
+            hist_result = "had no prior failures"
+        
+        st.session_state.sample_history_para = f"Analyzing a 6-month sample history for {st.session_state.client_name} ({st.session_state.sample_id}), this specific analyte “{st.session_state.sample_name}” has {hist_result} using the Scan RDI method during this period."
 
         # Narrative Logic
         em_parts = []
@@ -229,7 +243,7 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.em_details = "\n\n".join(details_list)
         st.rerun()
 
-    st.session_state.sample_history_para = st.text_area("Sample History (Editable)", value=st.session_state.sample_history_para, height=100)
+    st.session_state.sample_history_para = st.text_area("Sample History Preview (Editable)", value=st.session_state.sample_history_para, height=100)
     st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=120)
     st.session_state.em_details = st.text_area("EM Growth Details (Editable)", value=st.session_state.em_details, height=120)
 
