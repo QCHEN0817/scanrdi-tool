@@ -51,15 +51,15 @@ data = {}
 st.header("1. General Test Details")
 col1, col2, col3 = st.columns(3)
 with col1:
-    data["oos_id"] = st.text_input("OOS Number", "OOS-250000")
-    data["client_name"] = st.text_input("Client Name", "Pharmacy Name")
-    data["sample_id"] = st.text_input("Sample ID", "SCAN-250000")
+    data["oos_id"] = st.text_input("OOS Number", "OOS-252503")
+    data["client_name"] = st.text_input("Client Name", "Northmark Pharmacy")
+    data["sample_id"] = st.text_input("Sample ID (e.g. E12955)", "E12955")
 with col2:
     data["test_date"] = st.text_input("Test Date (DDMonYY)", datetime.now().strftime("%d%b%y"))
     data["sample_name"] = st.text_input("Sample / Active Name")
     data["lot_number"] = st.text_input("Lot Number")
 with col3:
-    # Updated Dosage Form with your specific options
+    # Dosage Form options updated
     data["dosage_form"] = st.selectbox("Dosage Form", ["Injectable", "Aqueous Solution", "Liquid", "Solution"])
     data["test_record"] = st.text_input("Record Ref (e.g. 060925-1040)")
     data["monthly_cleaning_date"] = st.text_input("Monthly Cleaning Date")
@@ -156,10 +156,8 @@ if selection == "ScanRDI":
     if 'narrative_summary' not in st.session_state: st.session_state.narrative_summary = ""
 
     if st.button("🪄 Auto-Generate Narratives"):
-        # Equipment Summary (Source 182)
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         
-        # Combined Narrative for "No Growth"
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
             st.session_state.narrative_summary = (
                 "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), "
@@ -181,13 +179,16 @@ if st.button("🚀 GENERATE FINAL REPORT"):
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
         try:
-            # Bracketing dates calculation (Source 184)
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
         except: pass
+        
         doc.render(data)
-        out_name = f"{data['oos_id']}_{selection}.docx"
+        
+        # Updated File Name Logic
+        out_name = f"{data['oos_id']} {data['client_name']} ({data['sample_id']}) - {selection}.docx"
+        
         doc.save(out_name)
         with open(out_name, "rb") as f:
             st.download_button("📂 Download Document", f, file_name=out_name)
