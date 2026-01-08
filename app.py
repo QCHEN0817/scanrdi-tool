@@ -28,6 +28,27 @@ def get_full_name(initials):
     }
     return lookup.get(initials.upper().strip(), "")
 
+# --- SESSION STATE INITIALIZATION (The fix for "forgetting") ---
+def init_state(key, default_value=""):
+    if key not in st.session_state:
+        st.session_state[key] = default_value
+
+# General Info Keys
+for k in ["oos_id", "client_name", "sample_id", "test_date", "sample_name", "lot_number", "dosage_form", "monthly_cleaning_date"]:
+    init_state(k, "OOS-252503" if k == "oos_id" else "Northmark Pharmacy" if k == "client_name" else "E12955" if k == "sample_id" else datetime.now().strftime("%d%b%y") if k == "test_date" else "")
+
+# ScanRDI Specific Keys
+for k in ["prepper_initial", "analyst_initial", "changeover_initial", "reader_initial", "bsc_id", "chgbsc_id", "scan_id", "org_choice", "manual_org", "test_record", "control_pos", "control_lot", "control_exp"]:
+    init_state(k)
+
+# EM Data Keys
+for k in ["obs_pers", "etx_pers", "id_pers", "obs_surf", "etx_surf", "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air", "id_air", "obs_room", "etx_room", "id_room", "weekly_init", "date_weekly"]:
+    init_state(k, "N/A" if "etx" in k or "id" in k else "")
+
+# Narrative Keys
+for k in ["equipment_summary", "narrative_summary", "em_details"]:
+    init_state(k)
+
 # --- SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.title("Sterility Platforms")
@@ -41,39 +62,42 @@ with st.sidebar:
 
 st.title(f"Sterility Investigation & Reporting: {st.session_state.active_platform}")
 
-data = {}
-
 # --- SECTION 1: GENERAL INFO ---
 st.header("1. General Test Details")
 col1, col2, col3 = st.columns(3)
 with col1:
-    data["oos_id"] = st.text_input("OOS Number", "OOS-252503")
-    data["client_name"] = st.text_input("Client Name", "Northmark Pharmacy")
-    data["sample_id"] = st.text_input("Sample ID", "E12955")
+    st.session_state.oos_id = st.text_input("OOS Number", st.session_state.oos_id)
+    st.session_state.client_name = st.text_input("Client Name", st.session_state.client_name)
+    st.session_state.sample_id = st.text_input("Sample ID", st.session_state.sample_id)
 with col2:
-    data["test_date"] = st.text_input("Test Date (DDMonYY)", datetime.now().strftime("%d%b%y"))
-    data["sample_name"] = st.text_input("Sample / Active Name")
-    data["lot_number"] = st.text_input("Lot Number")
+    st.session_state.test_date = st.text_input("Test Date (DDMonYY)", st.session_state.test_date)
+    st.session_state.sample_name = st.text_input("Sample / Active Name", st.session_state.sample_name)
+    st.session_state.lot_number = st.text_input("Lot Number", st.session_state.lot_number)
 with col3:
-    data["dosage_form"] = st.selectbox("Dosage Form", ["Injectable", "Aqueous Solution", "Liquid", "Solution"])
-    data["monthly_cleaning_date"] = st.text_input("Monthly Cleaning Date")
+    dosage_options = ["Injectable", "Aqueous Solution", "Liquid", "Solution"]
+    st.session_state.dosage_form = st.selectbox("Dosage Form", dosage_options, index=dosage_options.index(st.session_state.dosage_form) if st.session_state.dosage_form in dosage_options else 0)
+    st.session_state.monthly_cleaning_date = st.text_input("Monthly Cleaning Date", st.session_state.monthly_cleaning_date)
 
 # --- SECTION 2: PERSONNEL & FACILITY ---
 if st.session_state.active_platform == "ScanRDI":
     st.header("2. Personnel & Changeover")
     p1, p2, p3, p4 = st.columns(4)
     with p1:
-        data["prepper_initial"] = st.text_input("Prepper Initials").upper()
-        data["prepper_name"] = st.text_input("Prepper Full Name", value=get_full_name(data["prepper_initial"]))
+        st.session_state.prepper_initial = st.text_input("Prepper Initials", st.session_state.prepper_initial).upper()
+        prepper_full = get_full_name(st.session_state.prepper_initial)
+        st.text_input("Prepper Full Name", value=prepper_full, disabled=True)
     with p2:
-        data["analyst_initial"] = st.text_input("Processor Initials").upper()
-        data["analyst_name"] = st.text_input("Processor Full Name", value=get_full_name(data["analyst_initial"]))
+        st.session_state.analyst_initial = st.text_input("Processor Initials", st.session_state.analyst_initial).upper()
+        analyst_full = get_full_name(st.session_state.analyst_initial)
+        st.text_input("Processor Full Name", value=analyst_full, disabled=True)
     with p3:
-        data["changeover_initial"] = st.text_input("Changeover Initials").upper()
-        data["changeover_name"] = st.text_input("Changeover Full Name", value=get_full_name(data["changeover_initial"]))
+        st.session_state.changeover_initial = st.text_input("Changeover Initials", st.session_state.changeover_initial).upper()
+        changeover_full = get_full_name(st.session_state.changeover_initial)
+        st.text_input("Changeover Full Name", value=changeover_full, disabled=True)
     with p4:
-        data["reader_initial"] = st.text_input("Reader Initials").upper()
-        data["reader_name"] = st.text_input("Reader Full Name", value=get_full_name(data["reader_initial"]))
+        st.session_state.reader_initial = st.text_input("Reader Initials", st.session_state.reader_initial).upper()
+        reader_full = get_full_name(st.session_state.reader_initial)
+        st.text_input("Reader Full Name", value=reader_full, disabled=True)
 
     st.subheader("Equipment & Facility Smart Lookup")
     e1, e2 = st.columns(2)
@@ -93,104 +117,99 @@ if st.session_state.active_platform == "ScanRDI":
         return room, suite, suffix, location
 
     with e1:
-        proc_bsc = st.selectbox("Select Processing BSC ID", bsc_list)
-        data["bsc_id"] = proc_bsc if proc_bsc != "Other" else st.text_input("Manual Proc BSC")
-        p_room, p_suite, p_suffix, p_loc = get_room_logic(data["bsc_id"])
-        data["cr_id"], data["cr_suit"] = p_room, p_suite
+        st.session_state.bsc_id = st.selectbox("Select Processing BSC ID", bsc_list, index=bsc_list.index(st.session_state.bsc_id) if st.session_state.bsc_id in bsc_list else 0)
+        p_room, p_suite, p_suffix, p_loc = get_room_logic(st.session_state.bsc_id)
         st.caption(f"Processor: Suite {p_suite}{p_suffix} ({p_loc})")
     with e2:
-        chg_bsc = st.selectbox("Select Changeover BSC ID", bsc_list)
-        data["chgbsc_id"] = chg_bsc if chg_bsc != "Other" else st.text_input("Manual CHG BSC")
-        c_room, c_suite, c_suffix, c_loc = get_room_logic(data["chgbsc_id"])
+        st.session_state.chgbsc_id = st.selectbox("Select Changeover BSC ID", bsc_list, index=bsc_list.index(st.session_state.chgbsc_id) if st.session_state.chgbsc_id in bsc_list else 0)
+        c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
         st.caption(f"Changeover: Suite {c_suite}{c_suffix} ({c_loc})")
 
     st.header("3. Findings & EM Data")
     f1, f2 = st.columns(2)
     with f1:
-        data["scan_id"] = st.selectbox("ScanRDI ID", ["1230", "2017", "1040", "1877", "2225", "2132"])
-        shape_choice = st.selectbox("Org Shape", ["rod", "cocci", "Other"])
-        data["organism_morphology"] = shape_choice if shape_choice != "Other" else st.text_input("Enter Manual Org Shape")
+        scan_ids = ["1230", "2017", "1040", "1877", "2225", "2132"]
+        st.session_state.scan_id = st.selectbox("ScanRDI ID", scan_ids, index=scan_ids.index(st.session_state.scan_id) if st.session_state.scan_id in scan_ids else 0)
+        shape_opts = ["rod", "cocci", "Other"]
+        st.session_state.org_choice = st.selectbox("Org Shape", shape_opts, index=shape_opts.index(st.session_state.org_choice) if st.session_state.org_choice in shape_opts else 0)
+        if st.session_state.org_choice == "Other":
+            st.session_state.manual_org = st.text_input("Enter Manual Org Shape", st.session_state.manual_org)
+        
         try:
-            date_part = datetime.strptime(data["test_date"], "%d%b%y").strftime("%m%d%y")
-            default_ref = f"{date_part}-{data['scan_id']}-"
-        except: default_ref = ""
-        data["test_record"] = st.text_input("Record Ref", value=default_ref)
+            date_part = datetime.strptime(st.session_state.test_date, "%d%b%y").strftime("%m%d%y")
+            st.session_state.test_record = f"{date_part}-{st.session_state.scan_id}-"
+        except: pass
+        st.text_input("Record Ref", st.session_state.test_record, disabled=True)
+
     with f2:
-        data["control_positive"] = st.selectbox("Positive Control", ["A. brasiliensis", "B. subtilis", "C. albicans", "C. sporogenes", "P. aeruginosa", "S. aureus"])
-        data["control_lot"] = st.text_input("Control Lot")
-        data["control_data"] = st.text_input("Control Exp Date")
+        ctrl_opts = ["A. brasiliensis", "B. subtilis", "C. albicans", "C. sporogenes", "P. aeruginosa", "S. aureus"]
+        st.session_state.control_pos = st.selectbox("Positive Control", ctrl_opts, index=ctrl_opts.index(st.session_state.control_pos) if st.session_state.control_pos in ctrl_opts else 0)
+        st.session_state.control_lot = st.text_input("Control Lot", st.session_state.control_lot)
+        st.session_state.control_exp = st.text_input("Control Exp Date", st.session_state.control_exp)
 
     st.subheader("Table 1: EM Observations")
     em1, em2, em3 = st.columns(3)
     with em1:
-        data["obs_pers_dur"] = st.text_input("Personnel Obs", "")
-        data["etx_pers_dur"] = st.text_input("Pers ETX #", "N/A")
-        data["id_pers_dur"] = st.text_input("Pers ID", "N/A")
+        st.session_state.obs_pers = st.text_input("Personnel Obs", st.session_state.obs_pers)
+        st.session_state.etx_pers = st.text_input("Pers ETX #", st.session_state.etx_pers)
+        st.session_state.id_pers = st.text_input("Pers ID", st.session_state.id_pers)
     with em2:
-        data["obs_surf_dur"] = st.text_input("Surface Obs", "")
-        data["etx_surf_dur"] = st.text_input("Surf ETX #", "N/A")
-        data["id_surf_dur"] = st.text_input("Surf ID", "N/A")
+        st.session_state.obs_surf = st.text_input("Surface Obs", st.session_state.obs_surf)
+        st.session_state.etx_surf = st.text_input("Surf ETX #", st.session_state.etx_surf)
+        st.session_state.id_surf = st.text_input("Surf ID", st.session_state.id_surf)
     with em3:
-        data["obs_sett_dur"] = st.text_input("Settling Obs", "")
-        data["etx_sett_dur"] = st.text_input("Sett ETX #", "N/A")
-        data["id_sett_dur"] = st.text_input("Sett ID", "N/A")
+        st.session_state.obs_sett = st.text_input("Settling Obs", st.session_state.obs_sett)
+        st.session_state.etx_sett = st.text_input("Sett ETX #", st.session_state.etx_sett)
+        st.session_state.id_sett = st.text_input("Sett ID", st.session_state.id_sett)
 
     st.subheader("Weekly Bracketing")
     wk1, wk2 = st.columns(2)
     with wk1:
-        data["obs_air_wk_of"] = st.text_input("Weekly Air Obs", "")
-        data["etx_air_wk_of"] = st.text_input("Air ETX #", "N/A")
-        data["id_air_wk_of"] = st.text_input("Air ID", "N/A")
-        data["weekly_initial"] = st.text_input("Weekly Monitor Initials")
+        st.session_state.obs_air = st.text_input("Weekly Air Obs", st.session_state.obs_air)
+        st.session_state.etx_air = st.text_input("Air ETX #", st.session_state.etx_air)
+        st.session_state.id_air = st.text_input("Air ID", st.session_state.id_air)
+        st.session_state.weekly_init = st.text_input("Weekly Monitor Initials", st.session_state.weekly_init)
     with wk2:
-        data["obs_room_wk_of"] = st.text_input("Weekly Room Obs", "")
-        data["etx_room_wk_of"] = st.text_input("Room ETX #", "N/A")
-        data["id_room_wk_of"] = st.text_input("Room ID", "N/A")
-        data["date_of_weekly"] = st.text_input("Date of Weekly Monitoring")
+        st.session_state.obs_room = st.text_input("Weekly Room Obs", st.session_state.obs_room)
+        st.session_state.etx_room = st.text_input("Room ETX #", st.session_state.etx_room)
+        st.session_state.id_room = st.text_input("Room ID", st.session_state.id_room)
+        st.session_state.date_weekly = st.text_input("Date of Weekly Monitoring", st.session_state.date_weekly)
 
     st.header("4. EM Narratives")
-    if 'equipment_summary' not in st.session_state: st.session_state.equipment_summary = ""
-    if 'narrative_summary' not in st.session_state: st.session_state.narrative_summary = ""
-    if 'em_details' not in st.session_state: st.session_state.em_details = ""
-
     if st.button("🪄 Auto-Generate Narratives"):
         # Equipment Summary
-        st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
+        st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {analyst_full} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {changeover_full}."
         
-        # Smart Splicing Logic for Summary
+        # Growth Logic
         em_parts = []
-        if not data["obs_pers_dur"].strip(): em_parts.append("personal sampling (left touch and right touch)")
-        if not data["obs_surf_dur"].strip(): em_parts.append("surface sampling")
-        if not data["obs_sett_dur"].strip(): em_parts.append("settling plates")
+        if not st.session_state.obs_pers.strip(): em_parts.append("personal sampling (left touch and right touch)")
+        if not st.session_state.obs_surf.strip(): em_parts.append("surface sampling")
+        if not st.session_state.obs_sett.strip(): em_parts.append("settling plates")
         
         weekly_parts = []
-        if not data["obs_air_wk_of"].strip(): weekly_parts.append("weekly active air sampling")
-        if not data["obs_room_wk_of"].strip(): weekly_parts.append("weekly surface sampling")
+        if not st.session_state.obs_air.strip(): weekly_parts.append("weekly active air sampling")
+        if not st.session_state.obs_room.strip(): weekly_parts.append("weekly surface sampling")
 
         growth_sources = []
-        if data["obs_pers_dur"].strip(): growth_sources.append(("Personnel Sampling", data["obs_pers_dur"], data["etx_pers_dur"], data["id_pers_dur"]))
-        if data["obs_surf_dur"].strip(): growth_sources.append(("Surface Sampling", data["obs_surf_dur"], data["etx_surf_dur"], data["id_surf_dur"]))
-        if data["obs_sett_dur"].strip(): growth_sources.append(("Settling Plates", data["obs_sett_dur"], data["etx_sett_dur"], data["id_sett_dur"]))
-        if data["obs_air_wk_of"].strip(): growth_sources.append(("Weekly Active Air Sampling", data["obs_air_wk_of"], data["etx_air_wk_of"], data["id_air_wk_of"]))
-        # Exact Template logic for Room Sampling
-        if data["obs_room_wk_of"].strip(): growth_sources.append(("Surface Sampling of Cleanrooms during weekly room surface sampling", data["obs_room_wk_of"], data["etx_room_wk_of"], data["id_room_wk_of"]))
+        if st.session_state.obs_pers.strip(): growth_sources.append(("Personnel Sampling", st.session_state.obs_pers, st.session_state.etx_pers, st.session_state.id_pers))
+        if st.session_state.obs_surf.strip(): growth_sources.append(("Surface Sampling", st.session_state.obs_surf, st.session_state.etx_surf, st.session_state.id_surf))
+        if st.session_state.obs_sett.strip(): growth_sources.append(("Settling Plates", st.session_state.obs_sett, st.session_state.etx_sett, st.session_state.id_sett))
+        if st.session_state.obs_air.strip(): growth_sources.append(("Weekly Active Air Sampling", st.session_state.obs_air, st.session_state.etx_air, st.session_state.id_air))
+        if st.session_state.obs_room.strip(): growth_sources.append(("Surface Sampling of Cleanrooms during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room, st.session_state.id_room))
 
         if not growth_sources:
             st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling showed no microbial growth."
             st.session_state.em_details = ""
         else:
-            # Build Summary with Clean parts
             summary_text = "Upon analyzing the environmental monitoring results, "
             if em_parts:
                 summary_text += "no microbial growth was observed in " + ", ".join(em_parts[:-1]) + (", and " if len(em_parts) > 1 else "") + em_parts[-1] + ". "
             else:
                 summary_text += "microbial growth was observed during the testing period. "
-            
             if weekly_parts:
                 summary_text += "Additionally, " + " and ".join(weekly_parts) + " showed no microbial growth."
             st.session_state.narrative_summary = summary_text
 
-            # Build EM Details using your exact Template
             details_list = []
             for category, obs, etx, org_id in growth_sources:
                 para = (f"However, microbial growths were observed in {category} the week of testing. "
@@ -198,28 +217,31 @@ if st.session_state.active_platform == "ScanRDI":
                         f"{etx}. The organisms identified included {org_id}.")
                 details_list.append(para)
             st.session_state.em_details = "\n\n".join(details_list)
-        
         st.rerun()
 
-    data["equipment_summary"] = st.session_state.equipment_summary
-    data["narrative_summary"] = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=150)
-    data["em_details"] = st.text_area("EM Details (Editable)", value=st.session_state.em_details, height=150)
+    st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=150)
+    st.session_state.em_details = st.text_area("EM Details (Editable)", value=st.session_state.em_details, height=150)
 
 # --- FINAL GENERATION ---
 if st.button("🚀 GENERATE FINAL REPORT"):
     template_name = f"{st.session_state.active_platform} OOS template.docx"
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
+        
+        # Map state back to flat dict for docxtpl
+        final_data = {k: v for k, v in st.session_state.items()}
+        # Handle "No Growth" for blank table entries
+        for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
+            if not final_data[key].strip(): final_data[key] = "No Growth"
+        
         try:
-            dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
-            data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
-            data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
-            for key in ["obs_pers_dur", "obs_surf_dur", "obs_sett_dur", "obs_air_wk_of", "obs_room_wk_of"]:
-                if not data[key].strip(): data[key] = "No Growth"
+            dt_obj = datetime.strptime(st.session_state.test_date, "%d%b%y")
+            final_data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
+            final_data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
         except: pass
-        doc.render(data)
-        out_name = f"{data['oos_id']} {data['client_name']} ({data['sample_id']}) - {st.session_state.active_platform}.docx"
+        
+        doc.render(final_data)
+        out_name = f"{st.session_state.oos_id} {st.session_state.client_name} ({st.session_state.sample_id}) - {st.session_state.active_platform}.docx"
         doc.save(out_name)
         with open(out_name, "rb") as f:
             st.download_button("📂 Download Document", f, file_name=out_name)
-    else: st.error(f"Template '{template_name}' not found.")
