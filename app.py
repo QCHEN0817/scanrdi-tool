@@ -59,7 +59,8 @@ with col2:
     data["sample_name"] = st.text_input("Sample / Active Name")
     data["lot_number"] = st.text_input("Lot Number")
 with col3:
-    data["dosage_form"] = st.text_input("Dosage Form", "Injectable")
+    # Updated Dosage Form with your specific options
+    data["dosage_form"] = st.selectbox("Dosage Form", ["Injectable", "Aqueous Solution", "Liquid", "Solution"])
     data["test_record"] = st.text_input("Record Ref (e.g. 060925-1040)")
     data["monthly_cleaning_date"] = st.text_input("Monthly Cleaning Date")
 
@@ -155,10 +156,16 @@ if selection == "ScanRDI":
     if 'narrative_summary' not in st.session_state: st.session_state.narrative_summary = ""
 
     if st.button("🪄 Auto-Generate Narratives"):
+        # Equipment Summary (Source 182)
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         
+        # Combined Narrative for "No Growth"
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
-            st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling from both the week of testing and the week before testing showed no microbial growth."
+            st.session_state.narrative_summary = (
+                "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), "
+                "surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling from both the week of testing and the week "
+                "before testing showed no microbial growth."
+            )
             data["em_details"] = ""
         else:
             st.session_state.narrative_summary = "Microbial growth was observed during environmental monitoring as detailed in Table 1."
@@ -174,6 +181,7 @@ if st.button("🚀 GENERATE FINAL REPORT"):
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
         try:
+            # Bracketing dates calculation (Source 184)
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
