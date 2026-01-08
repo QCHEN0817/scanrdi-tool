@@ -110,7 +110,11 @@ if st.session_state.active_platform == "ScanRDI":
     f1, f2 = st.columns(2)
     with f1:
         data["scan_id"] = st.selectbox("ScanRDI ID", ["1230", "2017", "1040", "1877", "2225", "2132"])
-        data["organism_morphology"] = st.selectbox("Org Shape", ["rod", "cocci", "yeast/mold"])
+        
+        # Org Shape with manual input for "Other"
+        shape_choice = st.selectbox("Org Shape", ["rod", "cocci", "Other"])
+        data["organism_morphology"] = shape_choice if shape_choice != "Other" else st.text_input("Enter Manual Org Shape")
+        
         try:
             date_part = datetime.strptime(data["test_date"], "%d%b%y").strftime("%m%d%y")
             default_ref = f"{date_part}-{data['scan_id']}-"
@@ -155,7 +159,10 @@ if st.session_state.active_platform == "ScanRDI":
     if 'narrative_summary' not in st.session_state: st.session_state.narrative_summary = ""
 
     if st.button("🪄 Auto-Generate Narratives"):
+        # Mapping {{ equipment_summary }} based on facility rules
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
+        
+        # Mapping {{ narrative_summary }} based on "No Growth" rule
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
             st.session_state.narrative_summary = (
                 "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), "
@@ -177,6 +184,7 @@ if st.button("🚀 GENERATE FINAL REPORT"):
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
         try:
+            # Bracketing dates calculation (Source 184)
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
