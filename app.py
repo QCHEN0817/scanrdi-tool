@@ -14,6 +14,17 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# Helper function to auto-extract initials
+def get_initials(name):
+    if not name:
+        return ""
+    parts = name.strip().split()
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[-1][0]).upper()
+    elif len(parts) == 1:
+        return parts[0][0].upper()
+    return ""
+
 # --- SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.title("Sterility Platforms")
@@ -60,17 +71,21 @@ if selection == "ScanRDI":
     
     p1, p2, p3, p4 = st.columns(4)
     with p1:
-        data["prepper_name"] = st.text_input("Prepper Name")
-        data["prepper_initial"] = st.text_input("Prepper Init")
+        prepper = st.text_input("Prepper Name")
+        data["prepper_name"] = prepper
+        data["prepper_initial"] = st.text_input("Prepper Init", value=get_initials(prepper))
     with p2:
-        data["analyst_name"] = st.text_input("Processor Name")
-        data["analyst_initial"] = st.text_input("Processor Init")
+        analyst = st.text_input("Processor Name")
+        data["analyst_name"] = analyst
+        data["analyst_initial"] = st.text_input("Processor Init", value=get_initials(analyst))
     with p3:
-        data["changeover_name"] = st.text_input("Changeover Name")
-        data["changeover_initial"] = st.text_input("Changeover Init")
+        changeover = st.text_input("Changeover Name")
+        data["changeover_name"] = changeover
+        data["changeover_initial"] = st.text_input("Changeover Init", value=get_initials(changeover))
     with p4:
-        data["reader_name"] = st.text_input("Reader Name")
-        data["reader_initial"] = st.text_input("Reader Init")
+        reader = st.text_input("Reader Name")
+        data["reader_name"] = reader
+        data["reader_initial"] = st.text_input("Reader Init", value=get_initials(reader))
 
     st.subheader("Equipment & Facility Smart Lookup")
     e1, e2 = st.columns(2)
@@ -151,7 +166,6 @@ if selection == "ScanRDI":
     if 'em_details' not in st.session_state: st.session_state.em_details = ""
 
     if st.button("🪄 Auto-Generate Narratives"):
-        # Hidden Equipment Summary generation
         st.session_state.equipment_summary = (
             f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} "
             f"(Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} "
@@ -159,23 +173,19 @@ if selection == "ScanRDI":
             f"(Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         )
         
-        # New combined Narrative logic for "No Growth"
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
             st.session_state.narrative_summary = (
                 "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), "
                 "surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling from both the week of testing and the week "
                 "before testing showed no microbial growth."
             )
-            st.session_state.em_details = ""  # Clear em_details if no hits
+            st.session_state.em_details = ""
         else:
             st.session_state.narrative_summary = "Microbial growth was observed during environmental monitoring as detailed in Table 1."
             st.session_state.em_details = "Growth details are documented in the attached reports."
         st.rerun()
 
-    # Pass the value directly to the data dict without showing the UI element
     data["equipment_summary"] = st.session_state.equipment_summary
-    
-    # Only show the narrative and detail fields
     data["narrative_summary"] = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=150)
     data["em_details"] = st.text_area("EM Details (Editable)", value=st.session_state.em_details, height=100)
 
