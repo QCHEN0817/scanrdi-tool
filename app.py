@@ -35,6 +35,7 @@ with col3:
 if selection == "ScanRDI":
     st.header("2. Personnel & Equipment")
     
+    # Restored Changeover Personnel Fields
     p1, p2, p3, p4 = st.columns(4)
     with p1:
         data["prepper_name"] = st.text_input("Prepper Name")
@@ -43,8 +44,9 @@ if selection == "ScanRDI":
         data["analyst_name"] = st.text_input("Processor Name")
         data["analyst_initial"] = st.text_input("Processor Init")
     with p3:
-        data["changeover_name"] = st.text_input("Changeover Name", "N/A")
-        data["changeover_initial"] = st.text_input("Changeover Init", "N/A")
+        # CHG Analyst info restored
+        data["changeover_name"] = st.text_input("Changeover Name")
+        data["changeover_initial"] = st.text_input("Changeover Init")
     with p4:
         data["reader_name"] = st.text_input("Reader Name")
         data["reader_initial"] = st.text_input("Reader Init")
@@ -52,40 +54,67 @@ if selection == "ScanRDI":
     # Equipment Smart Lookup
     st.subheader("Equipment & Facility (Auto-Fill)")
     e1, e2 = st.columns(2)
+    
+    # BSC Options based on your facility
+    bsc_list = ["1310", "1309", "1311", "1312", "1314", "1313", "1316", "1798", "Other"]
+
     with e1:
-        # Selection includes your updated list
-        bsc_choice = st.selectbox("Select BSC ID", ["1310", "1309", "1311", "1312", "1314", "1313", "1316", "1798", "Other"])
-        data["bsc_id"] = bsc_choice if bsc_choice != "Other" else st.text_input("Enter Manual BSC ID")
+        # Processing BSC
+        proc_bsc = st.selectbox("Select Processing BSC ID", bsc_list)
+        data["bsc_id"] = proc_bsc if proc_bsc != "Other" else st.text_input("Enter Manual Proc BSC ID")
         
-        # Room Mapping Logic
-        if data["bsc_id"] in ["1310", "1309"]: 
-            data["cr_id"], data["cr_suit"] = "117", "117"
-        elif data["bsc_id"] in ["1311", "1312"]: 
-            data["cr_id"], data["cr_suit"] = "116", "116"
-        elif data["bsc_id"] in ["1314", "1313"]: 
-            data["cr_id"], data["cr_suit"] = "115", "115"
-        elif data["bsc_id"] in ["1316", "1798"]: 
-            data["cr_id"], data["cr_suit"] = "114", "114"
+        # Room Mapping for Processing
+        if data["bsc_id"] in ["1310", "1309"]: data["cr_id"], data["cr_suit"] = "117", "117"
+        elif data["bsc_id"] in ["1311", "1312"]: data["cr_id"], data["cr_suit"] = "116", "116"
+        elif data["bsc_id"] in ["1314", "1313"]: data["cr_id"], data["cr_suit"] = "115", "115"
+        elif data["bsc_id"] in ["1316", "1798"]: data["cr_id"], data["cr_suit"] = "114", "114"
         else:
             data["cr_id"] = st.text_input("Room ID")
             data["cr_suit"] = st.text_input("Suite #")
 
-        # Smart A/B Suffix & Description Logic (Even=B/Innermost, Odd=A/Middle)
+        # Even/Odd logic for Proc Room Suffix
         try:
-            bsc_num = int(data["bsc_id"])
-            suffix = "B" if bsc_num % 2 == 0 else "A"
-            location_desc = "innermost ISO 7 room" if suffix == "B" else "middle ISO 7 buffer room"
+            p_suffix = "B" if int(data["bsc_id"]) % 2 == 0 else "A"
+            p_loc = "innermost ISO 7 room" if p_suffix == "B" else "middle ISO 7 buffer room"
         except:
-            suffix = "B"
-            location_desc = "innermost ISO 7 room"
-
-        st.info(f"Automatically Mapped to Room {data['cr_id']} / Suite {data['cr_suit']}{suffix} ({location_desc})")
+            p_suffix, p_loc = "B", "innermost ISO 7 room"
+            
+        st.info(f"Processing: Room {data['cr_id']} / Suite {data['cr_suit']}{p_suffix} ({p_loc})")
 
     with e2:
+        # Changeover BSC Logic restored
+        chg_bsc = st.selectbox("Select Changeover BSC ID", bsc_list)
+        data["chgbsc_id"] = chg_bsc if chg_bsc != "Other" else st.text_input("Enter Manual CHG BSC ID")
+        
+        # Determine Changeover Suite/Room info
+        if data["chgbsc_id"] in ["1310", "1309"]: c_room, c_suite = "117", "117"
+        elif data["chgbsc_id"] in ["1311", "1312"]: c_room, c_suite = "116", "116"
+        elif data["chgbsc_id"] in ["1314", "1313"]: c_room, c_suite = "115", "115"
+        elif data["chgbsc_id"] in ["1316", "1798"]: c_room, c_suite = "114", "114"
+        else:
+            c_room = st.text_input("CHG Room ID")
+            c_suite = st.text_input("CHG Suite #")
+
+        # Even/Odd logic for CHG Room Suffix
+        try:
+            c_suffix = "B" if int(data["chgbsc_id"]) % 2 == 0 else "A"
+            c_loc = "innermost ISO 7 room" if c_suffix == "B" else "middle ISO 7 buffer room"
+        except:
+            c_suffix, c_loc = "A", "middle ISO 7 buffer room"
+
+        st.info(f"Changeover: Room {c_room} / Suite {c_suite}{c_suffix} ({c_loc})")
+
+    # Findings
+    f1, f2 = st.columns(2)
+    with f1:
         data["scan_id"] = st.text_input("ScanRDI ID (last 4 digits)")
         data["organism_morphology"] = st.selectbox("Org Shape", ["rod", "cocci", "yeast/mold"])
+    with f2:
+        data["control_positive"] = st.text_input("Pos Control", "B. subtilis")
+        data["control_lot"] = st.text_input("Control Lot")
+        data["control_data"] = st.text_input("Control Exp Date")
 
-    # Table 1 EM Bracketing (Mapping Source 184)
+    # Table 1 EM Data
     st.header("3. Table 1: EM Observations")
     em1, em2, em3 = st.columns(3)
     with em1:
@@ -114,16 +143,16 @@ if selection == "ScanRDI":
         data["id_room_wk_of"] = st.text_input("Room ID", "N/A")
         data["date_of_weekly"] = st.text_input("Date of Weekly Monitoring")
 
-    # Smart Narrative Calculation
+    # Auto-Narrative Generation Logic restored
     if st.button("🪄 Auto-Generate Narrative"):
-        # Mapping {{ equipment_summary }} (Source 182)
+        # Combined Equipment Summary for Proc and CHG (Source 182)
         data["equipment_summary"] = (
-            f"The ISO 5 BSC E00{data['bsc_id']}, located in the {location_desc} "
-            f"(Suite {data['cr_suit']}{suffix}), was thoroughly cleaned and disinfected "
-            f"prior to procedures in accordance with SOP 2.600.018."
+            f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} "
+            f"(Suite {data['cr_suit']}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} "
+            f"and the changeover step was conducted within the ISO 5 BSC in the {c_loc} "
+            f"(Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         )
         
-        # Mapping {{ narrative_summary }} and {{ em_details }} (Source 182)
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
             data["narrative_summary"] = (
                 "Upon analyzing the environmental monitoring results, no microbial growth was observed "
@@ -135,8 +164,8 @@ if selection == "ScanRDI":
             )
         else:
             data["narrative_summary"] = "Microbial growth was observed during environmental monitoring as detailed in Table 1."
-            data["em_details"] = "Growth details are provided in the attached EM identification reports."
-        st.success("Narratives Prepared!")
+            data["em_details"] = "Identification of growth is provided in the attached reports."
+        st.success("Changeover details and narratives prepared!")
 
 # --- GENERATION ---
 if st.button("🚀 GENERATE REPORT"):
@@ -144,7 +173,6 @@ if st.button("🚀 GENERATE REPORT"):
     if os.path.exists(template_path):
         doc = DocxTemplate(template_path)
         
-        # Calculate bracketing dates (Source 184)
         try:
             dt = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt - timedelta(days=1)).strftime("%d%b%y")
@@ -159,4 +187,4 @@ if st.button("🚀 GENERATE REPORT"):
         with open(out_file, "rb") as f:
             st.download_button("📂 Download Final Report", f, file_name=out_file)
     else:
-        st.error(f"Template '{template_path}' missing from GitHub folder!")
+        st.error(f"Template '{template_path}' missing from folder!")
