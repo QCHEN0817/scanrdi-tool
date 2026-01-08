@@ -14,7 +14,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- SIDEBAR NAVIGATION ---
+# --- SIDEBAR NAVIGATION (POP UP STYLE) ---
 with st.sidebar:
     st.title("🛡️ Sterility Platforms")
     st.write("Select a platform:")
@@ -107,10 +107,11 @@ if selection == "ScanRDI":
     st.header("3. Findings & EM Data")
     f1, f2 = st.columns(2)
     with f1:
-        data["scan_id"] = st.text_input("ScanRDI ID (last 4 digits)")
+        # Restricted ScanRDI ID options
+        scan_id_options = ["1230", "2017", "1040", "1877", "2225", "2132"]
+        data["scan_id"] = st.selectbox("ScanRDI ID", scan_id_options)
         data["organism_morphology"] = st.selectbox("Org Shape", ["rod", "cocci", "yeast/mold"])
     with f2:
-        # Abbreviated names only as requested
         control_choices = [
             "A. brasiliensis",
             "B. subtilis",
@@ -152,14 +153,13 @@ if selection == "ScanRDI":
         data["date_of_weekly"] = st.text_input("Date of Weekly Monitoring")
 
     if st.button("🪄 Auto-Generate Narratives"):
-        # Mapping {{ equipment_summary }} based on facility rules 
+        # Mapping {{ equipment_summary }} 
         data["equipment_summary"] = (
             f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} "
             f"(Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} "
             f"and the changeover step was conducted within the ISO 5 BSC in the {c_loc} "
             f"(Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         )
-        # Smart narrative logic for EM results 
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
             data["narrative_summary"] = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates."
             data["em_details"] = "Weekly active air sampling and weekly surface sampling from both the week of testing and the week before testing showed no microbial growth."
@@ -168,21 +168,12 @@ if selection == "ScanRDI":
             data["em_details"] = "Growth details are documented in the attached reports."
         st.success("Narratives Prepared!")
 
-elif selection == "Celsis":
-    st.header("Celsis Specific Fields")
-    st.info("Template and fields for Celsis will appear here.")
-
-elif selection == "USP 71":
-    st.header("USP 71 Specific Fields")
-    st.info("Template and fields for USP 71 will appear here.")
-
 # --- FINAL GENERATION ---
 if st.button("🚀 GENERATE FINAL REPORT"):
     template_name = f"{selection} OOS template.docx"
-    if os.path.exists(template_path := template_name):
-        doc = DocxTemplate(template_path)
+    if os.path.exists(template_name):
+        doc = DocxTemplate(template_name)
         try:
-            # Automatic bracketing dates 
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
