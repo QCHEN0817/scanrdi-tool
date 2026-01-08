@@ -28,26 +28,32 @@ def get_full_name(initials):
     }
     return lookup.get(initials.upper().strip(), "")
 
-# --- SESSION STATE INITIALIZATION (The fix for "forgetting") ---
+# --- SESSION STATE INITIALIZATION ---
 def init_state(key, default_value=""):
     if key not in st.session_state:
         st.session_state[key] = default_value
 
-# General Info Keys
-for k in ["oos_id", "client_name", "sample_id", "test_date", "sample_name", "lot_number", "dosage_form", "monthly_cleaning_date"]:
-    init_state(k, "OOS-252503" if k == "oos_id" else "Northmark Pharmacy" if k == "client_name" else "E12955" if k == "sample_id" else datetime.now().strftime("%d%b%y") if k == "test_date" else "")
+# Fields to persist
+field_keys = [
+    "oos_id", "client_name", "sample_id", "test_date", "sample_name", "lot_number", 
+    "dosage_form", "monthly_cleaning_date", "prepper_initial", "analyst_initial", 
+    "changeover_initial", "reader_initial", "bsc_id", "chgbsc_id", "scan_id", 
+    "org_choice", "manual_org", "test_record", "control_pos", "control_lot", 
+    "control_exp", "obs_pers", "etx_pers", "id_pers", "obs_surf", "etx_surf", 
+    "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air_weekly", 
+    "id_air_weekly", "obs_room", "etx_room_weekly", "id_room_weekly", "weekly_init", 
+    "date_weekly", "equipment_summary", "narrative_summary", "em_details", 
+    "sample_history_para"
+]
 
-# ScanRDI Specific Keys
-for k in ["prepper_initial", "analyst_initial", "changeover_initial", "reader_initial", "bsc_id", "chgbsc_id", "scan_id", "org_choice", "manual_org", "test_record", "control_pos", "control_lot", "control_exp"]:
-    init_state(k)
-
-# EM Data Keys
-for k in ["obs_pers", "etx_pers", "id_pers", "obs_surf", "etx_surf", "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air", "id_air", "obs_room", "etx_room", "id_room", "weekly_init", "date_weekly"]:
-    init_state(k, "N/A" if "etx" in k or "id" in k else "")
-
-# Narrative Keys
-for k in ["equipment_summary", "narrative_summary", "em_details"]:
-    init_state(k)
+for k in field_keys:
+    if k == "oos_id": init_state(k, "OOS-252503")
+    elif k == "client_name": init_state(k, "Northmark Pharmacy")
+    elif k == "sample_id": init_state(k, "E12955")
+    elif k == "test_date": init_state(k, datetime.now().strftime("%d%b%y"))
+    elif k == "dosage_form": init_state(k, "Injectable")
+    elif "etx" in k or "id" in k: init_state(k, "N/A")
+    else: init_state(k, "")
 
 # --- SIDEBAR NAVIGATION ---
 with st.sidebar:
@@ -75,7 +81,8 @@ with col2:
     st.session_state.lot_number = st.text_input("Lot Number", st.session_state.lot_number)
 with col3:
     dosage_options = ["Injectable", "Aqueous Solution", "Liquid", "Solution"]
-    st.session_state.dosage_form = st.selectbox("Dosage Form", dosage_options, index=dosage_options.index(st.session_state.dosage_form) if st.session_state.dosage_form in dosage_options else 0)
+    idx = dosage_options.index(st.session_state.dosage_form) if st.session_state.dosage_form in dosage_options else 0
+    st.session_state.dosage_form = st.selectbox("Dosage Form", dosage_options, index=idx)
     st.session_state.monthly_cleaning_date = st.text_input("Monthly Cleaning Date", st.session_state.monthly_cleaning_date)
 
 # --- SECTION 2: PERSONNEL & FACILITY ---
@@ -166,21 +173,24 @@ if st.session_state.active_platform == "ScanRDI":
     wk1, wk2 = st.columns(2)
     with wk1:
         st.session_state.obs_air = st.text_input("Weekly Air Obs", st.session_state.obs_air)
-        st.session_state.etx_air = st.text_input("Air ETX #", st.session_state.etx_air)
-        st.session_state.id_air = st.text_input("Air ID", st.session_state.id_air)
+        st.session_state.etx_air_weekly = st.text_input("Weekly Air ETX #", st.session_state.etx_air_weekly)
+        st.session_state.id_air_weekly = st.text_input("Weekly Air ID", st.session_state.id_air_weekly)
         st.session_state.weekly_init = st.text_input("Weekly Monitor Initials", st.session_state.weekly_init)
     with wk2:
         st.session_state.obs_room = st.text_input("Weekly Room Obs", st.session_state.obs_room)
-        st.session_state.etx_room = st.text_input("Room ETX #", st.session_state.etx_room)
-        st.session_state.id_room = st.text_input("Room ID", st.session_state.id_room)
+        st.session_state.etx_room_weekly = st.text_input("Weekly Surf ETX #", st.session_state.etx_room_weekly)
+        st.session_state.id_room_weekly = st.text_input("Weekly Surf ID", st.session_state.id_room_weekly)
         st.session_state.date_weekly = st.text_input("Date of Weekly Monitoring", st.session_state.date_weekly)
 
-    st.header("4. EM Narratives")
-    if st.button("🪄 Auto-Generate Narratives"):
+    st.header("4. Automated Summaries")
+    if st.button("🪄 Auto-Generate All"):
         # Equipment Summary
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {analyst_full} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {changeover_full}."
         
-        # Growth Logic
+        # History Paragraph (Updated Template for failures)
+        st.session_state.sample_history_para = f"Analyzing a 6-month sample history for {st.session_state.client_name} ({st.session_state.sample_id}), this specific analyte “{st.session_state.sample_name}” has had no prior failures using the Scan RDI method during this period."
+
+        # Narrative Logic
         em_parts = []
         if not st.session_state.obs_pers.strip(): em_parts.append("personal sampling (left touch and right touch)")
         if not st.session_state.obs_surf.strip(): em_parts.append("surface sampling")
@@ -194,8 +204,8 @@ if st.session_state.active_platform == "ScanRDI":
         if st.session_state.obs_pers.strip(): growth_sources.append(("Personnel Sampling", st.session_state.obs_pers, st.session_state.etx_pers, st.session_state.id_pers))
         if st.session_state.obs_surf.strip(): growth_sources.append(("Surface Sampling", st.session_state.obs_surf, st.session_state.etx_surf, st.session_state.id_surf))
         if st.session_state.obs_sett.strip(): growth_sources.append(("Settling Plates", st.session_state.obs_sett, st.session_state.etx_sett, st.session_state.id_sett))
-        if st.session_state.obs_air.strip(): growth_sources.append(("Weekly Active Air Sampling", st.session_state.obs_air, st.session_state.etx_air, st.session_state.id_air))
-        if st.session_state.obs_room.strip(): growth_sources.append(("Surface Sampling of Cleanrooms during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room, st.session_state.id_room))
+        if st.session_state.obs_air.strip(): growth_sources.append(("Weekly Active Air Sampling", st.session_state.obs_air, st.session_state.etx_air_weekly, st.session_state.id_air_weekly))
+        if st.session_state.obs_room.strip(): growth_sources.append(("Surface Sampling of Cleanrooms during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room_weekly, st.session_state.id_room_weekly))
 
         if not growth_sources:
             st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling showed no microbial growth."
@@ -219,27 +229,23 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.em_details = "\n\n".join(details_list)
         st.rerun()
 
-    st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=150)
-    st.session_state.em_details = st.text_area("EM Details (Editable)", value=st.session_state.em_details, height=150)
+    st.session_state.sample_history_para = st.text_area("Sample History (Editable)", value=st.session_state.sample_history_para, height=100)
+    st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=120)
+    st.session_state.em_details = st.text_area("EM Growth Details (Editable)", value=st.session_state.em_details, height=120)
 
 # --- FINAL GENERATION ---
 if st.button("🚀 GENERATE FINAL REPORT"):
     template_name = f"{st.session_state.active_platform} OOS template.docx"
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
-        
-        # Map state back to flat dict for docxtpl
         final_data = {k: v for k, v in st.session_state.items()}
-        # Handle "No Growth" for blank table entries
         for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
             if not final_data[key].strip(): final_data[key] = "No Growth"
-        
         try:
             dt_obj = datetime.strptime(st.session_state.test_date, "%d%b%y")
             final_data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             final_data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
         except: pass
-        
         doc.render(final_data)
         out_name = f"{st.session_state.oos_id} {st.session_state.client_name} ({st.session_state.sample_id}) - {st.session_state.active_platform}.docx"
         doc.save(out_name)
