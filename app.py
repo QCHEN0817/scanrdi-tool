@@ -16,8 +16,7 @@ st.markdown("""
 
 # Helper function for reverse lookup (Initials -> Full Name)
 def get_full_name(initials):
-    if not initials:
-        return ""
+    if not initials: return ""
     lookup = {
         "HS": "Halaina Smith", "DS": "Devanshi Shah", "GS": "Gabbie Surber",
         "MRB": "Muralidhar Bythatagari", "KSM": "Karla Silva", "DT": "Debrework Tassew",
@@ -34,7 +33,6 @@ with st.sidebar:
     st.title("Sterility Platforms")
     if "active_platform" not in st.session_state:
         st.session_state.active_platform = "ScanRDI"
-
     if st.button("ScanRDI"): st.session_state.active_platform = "ScanRDI"
     if st.button("Celsis"): st.session_state.active_platform = "Celsis"
     if st.button("USP 71"): st.session_state.active_platform = "USP 71"
@@ -110,16 +108,12 @@ if st.session_state.active_platform == "ScanRDI":
     f1, f2 = st.columns(2)
     with f1:
         data["scan_id"] = st.selectbox("ScanRDI ID", ["1230", "2017", "1040", "1877", "2225", "2132"])
-        
-        # Org Shape with manual input for "Other"
         shape_choice = st.selectbox("Org Shape", ["rod", "cocci", "Other"])
         data["organism_morphology"] = shape_choice if shape_choice != "Other" else st.text_input("Enter Manual Org Shape")
-        
         try:
             date_part = datetime.strptime(data["test_date"], "%d%b%y").strftime("%m%d%y")
             default_ref = f"{date_part}-{data['scan_id']}-"
-        except:
-            default_ref = ""
+        except: default_ref = ""
         data["test_record"] = st.text_input("Record Ref", value=default_ref)
     with f2:
         data["control_positive"] = st.selectbox("Positive Control", ["A. brasiliensis", "B. subtilis", "C. albicans", "C. sporogenes", "P. aeruginosa", "S. aureus"])
@@ -157,26 +151,46 @@ if st.session_state.active_platform == "ScanRDI":
     st.header("4. EM Narratives")
     if 'equipment_summary' not in st.session_state: st.session_state.equipment_summary = ""
     if 'narrative_summary' not in st.session_state: st.session_state.narrative_summary = ""
+    if 'em_details' not in st.session_state: st.session_state.em_details = ""
 
     if st.button("🪄 Auto-Generate Narratives"):
-        # Mapping {{ equipment_summary }} based on facility rules
+        # Equipment Summary
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         
-        # Mapping {{ narrative_summary }} based on "No Growth" rule
-        if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
-            st.session_state.narrative_summary = (
-                "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), "
-                "surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling from both the week of testing and the week "
-                "before testing showed no microbial growth."
-            )
-            data["em_details"] = ""
+        # SMART Narrative Splicing Logic
+        em_parts = []
+        if data["obs_pers_dur"] == "No Growth": em_parts.append("personal sampling (left touch and right touch)")
+        if data["obs_surf_dur"] == "No Growth": em_parts.append("surface sampling")
+        if data["obs_sett_dur"] == "No Growth": em_parts.append("settling plates")
+        
+        weekly_parts = []
+        if data["obs_air_wk_of"] == "No Growth": weekly_parts.append("weekly active air sampling")
+        if data["obs_room_wk_of"] == "No Growth": weekly_parts.append("weekly surface sampling")
+
+        # Build Narrative Summary
+        if len(em_parts) == 3 and len(weekly_parts) == 2:
+            st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling showed no microbial growth."
+            st.session_state.em_details = "" # Completely cleared when no growth
         else:
-            st.session_state.narrative_summary = "Microbial growth was observed during environmental monitoring as detailed in Table 1."
-            data["em_details"] = "Growth details are documented in the attached reports."
+            # Case where there is at least one growth
+            summary_text = "Upon analyzing the environmental monitoring results, "
+            if em_parts:
+                summary_text += "no microbial growth was observed in " + ", ".join(em_parts[:-1]) + (", and " if len(em_parts) > 1 else "") + em_parts[-1] + ". "
+            else:
+                summary_text += "microbial growth was observed in all daily monitoring categories. "
+            
+            if weekly_parts:
+                summary_text += "Additionally, " + " and ".join(weekly_parts) + " showed no microbial growth."
+            
+            st.session_state.narrative_summary = summary_text
+            # Populate EM Details because growth exists
+            st.session_state.em_details = "Microbial growth was observed during environmental monitoring. Identification and corrective action details are documented in the attached reports."
+        
         st.rerun()
 
     data["equipment_summary"] = st.session_state.equipment_summary
-    data["narrative_summary"] = st.text_area("Narrative Summary", value=st.session_state.narrative_summary, height=150)
+    data["narrative_summary"] = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=150)
+    data["em_details"] = st.text_area("EM Details (Editable)", value=st.session_state.em_details, height=100)
 
 # --- FINAL GENERATION ---
 if st.button("🚀 GENERATE FINAL REPORT"):
@@ -184,7 +198,7 @@ if st.button("🚀 GENERATE FINAL REPORT"):
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
         try:
-            # Bracketing dates calculation (Source 184)
+            # Bracketing dates calculation
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
@@ -194,5 +208,4 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         doc.save(out_name)
         with open(out_name, "rb") as f:
             st.download_button("📂 Download Document", f, file_name=out_name)
-    else:
-        st.error(f"Template '{template_name}' not found.")
+    else: st.error(f"Template '{template_name}' not found.")
