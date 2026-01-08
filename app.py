@@ -14,10 +14,28 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Helper function to auto-extract initials
+# Helper function with specific exceptions for initials
 def get_initials(name):
     if not name:
         return ""
+    
+    # Standardize name for checking exceptions
+    clean_name = name.strip().lower()
+    
+    # Specific exceptions
+    exceptions = {
+        "varsha subramanian": "VV",
+        "clea s. garza": "CSG",
+        "clea garza": "CSG",
+        "guanchen li": "GL",
+        "guan chen li": "GL",
+        "qiyue chen": "QYC"
+    }
+    
+    if clean_name in exceptions:
+        return exceptions[clean_name]
+    
+    # Default logic: First letter of first and last name
     parts = name.strip().split()
     if len(parts) >= 2:
         return (parts[0][0] + parts[-1][0]).upper()
@@ -166,6 +184,7 @@ if selection == "ScanRDI":
     if 'em_details' not in st.session_state: st.session_state.em_details = ""
 
     if st.button("🪄 Auto-Generate Narratives"):
+        # Equipment Summary (Source 182)
         st.session_state.equipment_summary = (
             f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} "
             f"(Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} "
@@ -173,6 +192,7 @@ if selection == "ScanRDI":
             f"(Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         )
         
+        # Combined Narrative for "No Growth"
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
             st.session_state.narrative_summary = (
                 "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), "
@@ -195,6 +215,7 @@ if st.button("🚀 GENERATE FINAL REPORT"):
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
         try:
+            # Bracketing dates calculation (Source 184)
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
