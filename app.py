@@ -14,7 +14,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- SIDEBAR NAVIGATION (POP UP STYLE) ---
+# --- SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.title("🛡️ Sterility Platforms")
     st.write("Click a platform to start:")
@@ -38,7 +38,7 @@ st.title(f"Investigation Wizard: {selection}")
 # --- DATA DICTIONARY ---
 data = {}
 
-# --- SECTION 1: GENERAL INFO (COMMON) ---
+# --- SECTION 1: GENERAL INFO ---
 st.header("1. General Test Details")
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -110,8 +110,7 @@ if selection == "ScanRDI":
         data["scan_id"] = st.text_input("ScanRDI ID (last 4 digits)")
         data["organism_morphology"] = st.selectbox("Org Shape", ["rod", "cocci", "yeast/mold"])
     with f2:
-        # Restricted Positive Control Options as requested
-        control_options = [
+        control_choices = [
             "A. brasiliensis: Aspergillus brasiliensis",
             "B. subtilis: Bacillus spizizenii (formerly Bacillus subtilis)",
             "C. albicans: Candida albicans",
@@ -119,11 +118,13 @@ if selection == "ScanRDI":
             "P. aeruginosa: Pseudomonas paraeruginosa (formerly Pseudomonas aeruginosa)",
             "S. aureus: Staphylococcus aureus"
         ]
-        data["control_positive"] = st.selectbox("Positive Control", control_options)
+        selected_control = st.selectbox("Positive Control", control_choices)
+        # Logic to extract ONLY the abbreviation (e.g., C. albicans)
+        data["control_positive"] = selected_control.split(":")[0].strip()
         data["control_lot"] = st.text_input("Control Lot")
         data["control_data"] = st.text_input("Control Exp Date")
 
-    # Table 1 EM Data mapping
+    # Table 1 EM Data (Source 184)
     em_col1, em_col2, em_col3 = st.columns(3)
     with em_col1:
         data["obs_pers_dur"] = st.text_input("Personnel Obs", "No Growth")
@@ -166,14 +167,6 @@ if selection == "ScanRDI":
             data["narrative_summary"] = "Microbial growth was observed during environmental monitoring as detailed in Table 1."
             data["em_details"] = "Growth details are documented in the attached reports."
         st.success("Narratives Prepared!")
-
-elif selection == "Celsis":
-    st.header("Celsis Specific Fields")
-    st.info("Template and fields for Celsis will appear here.")
-
-elif selection == "USP 71":
-    st.header("USP 71 Specific Fields")
-    st.info("Template and fields for USP 71 will appear here.")
 
 # --- FINAL GENERATION ---
 if st.button("🚀 GENERATE FINAL REPORT"):
