@@ -9,18 +9,31 @@ st.set_page_config(page_title="Sterility OOS Wizard", layout="wide")
 # --- CUSTOM STYLING ---
 st.markdown("""
     <style>
-    .main { background-color: #f5f5f5; }
-    .stButton>button { width: 100%; height: 3em; background-color: #007bff; color: white; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; }
+    .main { background-color: #f9f9f9; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- SIDEBAR PLATFORM SELECTOR ---
+# --- SIDEBAR NAVIGATION (POP UP STYLE) ---
 with st.sidebar:
-    st.title("🛡️ Sterility Tool")
-    selection = st.sidebar.selectbox("Choose Platform:", ["ScanRDI", "Celsis", "USP 71"])
-    st.info(f"Currently working on {selection} template.")
+    st.title("🛡️ Sterility Platforms")
+    st.write("Click a platform to start:")
+    
+    if "active_platform" not in st.session_state:
+        st.session_state.active_platform = "ScanRDI"
 
-st.title(f"Sterility Investigation Wizard: {selection}")
+    if st.button("🔬 ScanRDI"):
+        st.session_state.active_platform = "ScanRDI"
+    if st.button("🧪 Celsis"):
+        st.session_state.active_platform = "Celsis"
+    if st.button("🧫 USP 71"):
+        st.session_state.active_platform = "USP 71"
+    
+    st.divider()
+    st.success(f"Current: {st.session_state.active_platform}")
+
+selection = st.session_state.active_platform
+st.title(f"Investigation Wizard: {selection}")
 
 # --- DATA DICTIONARY ---
 data = {}
@@ -61,7 +74,6 @@ if selection == "ScanRDI":
 
     st.subheader("Equipment & Facility Smart Lookup")
     e1, e2 = st.columns(2)
-    
     bsc_list = ["1310", "1309", "1311", "1312", "1314", "1313", "1316", "1798", "Other"]
 
     def get_room_logic(bsc_id):
@@ -77,7 +89,6 @@ if selection == "ScanRDI":
         elif bsc_id in ["1314", "1313"]: room, suite = "115", "115"
         elif bsc_id in ["1316", "1798"]: room, suite = "114", "114"
         else: room, suite = "Unknown", "Unknown"
-        
         return room, suite, suffix, location
 
     with e1:
@@ -85,24 +96,34 @@ if selection == "ScanRDI":
         data["bsc_id"] = proc_bsc if proc_bsc != "Other" else st.text_input("Manual Proc BSC")
         p_room, p_suite, p_suffix, p_loc = get_room_logic(data["bsc_id"])
         data["cr_id"], data["cr_suit"] = p_room, p_suite
-        st.caption(f"📍 Processor Room: {p_room} / Suite {p_suite}{p_suffix} ({p_loc})")
+        st.caption(f"📍 Processor: {p_room} / Suite {p_suite}{p_suffix} ({p_loc})")
 
     with e2:
         chg_bsc = st.selectbox("Select Changeover BSC ID", bsc_list)
         data["chgbsc_id"] = chg_bsc if chg_bsc != "Other" else st.text_input("Manual CHG BSC")
         c_room, c_suite, c_suffix, c_loc = get_room_logic(data["chgbsc_id"])
-        st.caption(f"📍 Changeover Room: {c_room} / Suite {c_suite}{c_suffix} ({c_loc})")
+        st.caption(f"📍 Changeover: {c_room} / Suite {c_suite}{c_suffix} ({c_loc})")
 
-    st.header("3. Findings & EM Data (Table 1)")
+    st.header("3. Findings & EM Data")
     f1, f2 = st.columns(2)
     with f1:
         data["scan_id"] = st.text_input("ScanRDI ID (last 4 digits)")
         data["organism_morphology"] = st.selectbox("Org Shape", ["rod", "cocci", "yeast/mold"])
     with f2:
-        data["control_positive"] = st.text_input("Pos Control", "B. subtilis")
+        # Restricted Positive Control Options as requested
+        control_options = [
+            "A. brasiliensis: Aspergillus brasiliensis",
+            "B. subtilis: Bacillus spizizenii (formerly Bacillus subtilis)",
+            "C. albicans: Candida albicans",
+            "C. sporogenes: Clostridium sporogenes",
+            "P. aeruginosa: Pseudomonas paraeruginosa (formerly Pseudomonas aeruginosa)",
+            "S. aureus: Staphylococcus aureus"
+        ]
+        data["control_positive"] = st.selectbox("Positive Control", control_options)
         data["control_lot"] = st.text_input("Control Lot")
         data["control_data"] = st.text_input("Control Exp Date")
 
+    # Table 1 EM Data mapping
     em_col1, em_col2, em_col3 = st.columns(3)
     with em_col1:
         data["obs_pers_dur"] = st.text_input("Personnel Obs", "No Growth")
@@ -130,46 +151,44 @@ if selection == "ScanRDI":
         data["id_room_wk_of"] = st.text_input("Room ID", "N/A")
         data["date_of_weekly"] = st.text_input("Date of Weekly Monitoring")
 
-    st.header("4. Review & Finalize")
-    if st.button("🪄 Auto-Generate All Narratives"):
+    if st.button("🪄 Auto-Generate Narratives"):
+        # Mapping {{ equipment_summary }} based on Source 182
         data["equipment_summary"] = (
             f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} "
             f"(Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} "
             f"and the changeover step was conducted within the ISO 5 BSC in the {c_loc} "
             f"(Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         )
-        
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
-            data["narrative_summary"] = (
-                "Upon analyzing the environmental monitoring results, no microbial growth was observed "
-                "in personal sampling (left touch and right touch), surface sampling, or settling plates."
-            )
-            data["em_details"] = (
-                "Weekly active air sampling and weekly surface sampling from both the week of testing "
-                "and the week before testing showed no microbial growth."
-            )
+            data["narrative_summary"] = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates."
+            data["em_details"] = "Weekly active air sampling and weekly surface sampling from both the week of testing and the week before testing showed no microbial growth."
         else:
             data["narrative_summary"] = "Microbial growth was observed during environmental monitoring as detailed in Table 1."
-            data["em_details"] = "Growth details are documented in the attached EM identification reports."
-        st.success("All Summary Fields have been populated!")
+            data["em_details"] = "Growth details are documented in the attached reports."
+        st.success("Narratives Prepared!")
+
+elif selection == "Celsis":
+    st.header("Celsis Specific Fields")
+    st.info("Template and fields for Celsis will appear here.")
+
+elif selection == "USP 71":
+    st.header("USP 71 Specific Fields")
+    st.info("Template and fields for USP 71 will appear here.")
 
 # --- FINAL GENERATION ---
 if st.button("🚀 GENERATE FINAL REPORT"):
     template_name = f"{selection} OOS template.docx"
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
-        
         try:
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
         except: pass
-            
         doc.render(data)
         out_name = f"{data['oos_id']}_{selection}.docx"
         doc.save(out_name)
-        
         with open(out_name, "rb") as f:
             st.download_button("📂 Download Final Document", f, file_name=out_name)
     else:
-        st.error(f"Required template '{template_name}' not found on server.")
+        st.error(f"Template '{template_name}' not found.")
