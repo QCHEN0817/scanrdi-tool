@@ -157,7 +157,7 @@ if st.session_state.active_platform == "ScanRDI":
         # Equipment Summary
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         
-        # Build "No Growth" Narrative Components (Smart Splicing)
+        # Smart Splicing Logic for Summary
         em_parts = []
         if not data["obs_pers_dur"].strip(): em_parts.append("personal sampling (left touch and right touch)")
         if not data["obs_surf_dur"].strip(): em_parts.append("surface sampling")
@@ -167,19 +167,19 @@ if st.session_state.active_platform == "ScanRDI":
         if not data["obs_air_wk_of"].strip(): weekly_parts.append("weekly active air sampling")
         if not data["obs_room_wk_of"].strip(): weekly_parts.append("weekly surface sampling")
 
-        # Check for growth based on non-blank input
         growth_sources = []
         if data["obs_pers_dur"].strip(): growth_sources.append(("Personnel Sampling", data["obs_pers_dur"], data["etx_pers_dur"], data["id_pers_dur"]))
         if data["obs_surf_dur"].strip(): growth_sources.append(("Surface Sampling", data["obs_surf_dur"], data["etx_surf_dur"], data["id_surf_dur"]))
         if data["obs_sett_dur"].strip(): growth_sources.append(("Settling Plates", data["obs_sett_dur"], data["etx_sett_dur"], data["id_sett_dur"]))
         if data["obs_air_wk_of"].strip(): growth_sources.append(("Weekly Active Air Sampling", data["obs_air_wk_of"], data["etx_air_wk_of"], data["id_air_wk_of"]))
-        if data["obs_room_wk_of"].strip(): growth_sources.append(("Weekly Room Surface Sampling", data["obs_room_wk_of"], data["etx_room_wk_of"], data["id_room_wk_of"]))
+        # Exact Template logic for Room Sampling
+        if data["obs_room_wk_of"].strip(): growth_sources.append(("Surface Sampling of Cleanrooms during weekly room surface sampling", data["obs_room_wk_of"], data["etx_room_wk_of"], data["id_room_wk_of"]))
 
         if not growth_sources:
             st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling showed no microbial growth."
             st.session_state.em_details = ""
         else:
-            # Construct Narrative Summary based on what is CLEAN
+            # Build Summary with Clean parts
             summary_text = "Upon analyzing the environmental monitoring results, "
             if em_parts:
                 summary_text += "no microbial growth was observed in " + ", ".join(em_parts[:-1]) + (", and " if len(em_parts) > 1 else "") + em_parts[-1] + ". "
@@ -190,10 +190,10 @@ if st.session_state.active_platform == "ScanRDI":
                 summary_text += "Additionally, " + " and ".join(weekly_parts) + " showed no microbial growth."
             st.session_state.narrative_summary = summary_text
 
-            # Construct EM Details Paragraph for GROWTH
+            # Build EM Details using your exact Template
             details_list = []
             for category, obs, etx, org_id in growth_sources:
-                para = (f"However, microbial growths were observed in {category} during the week of testing. "
+                para = (f"However, microbial growths were observed in {category} the week of testing. "
                         f"Specifically, {obs}. The plates were submitted for microbial identification under sample IDs "
                         f"{etx}. The organisms identified included {org_id}.")
                 details_list.append(para)
@@ -214,7 +214,6 @@ if st.button("🚀 GENERATE FINAL REPORT"):
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
-            # Final Check: replace blank observations with "No Growth" for the Word Doc table
             for key in ["obs_pers_dur", "obs_surf_dur", "obs_sett_dur", "obs_air_wk_of", "obs_room_wk_of"]:
                 if not data[key].strip(): data[key] = "No Growth"
         except: pass
