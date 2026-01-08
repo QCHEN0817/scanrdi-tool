@@ -13,10 +13,9 @@ selection = st.sidebar.radio("Select Test Type:", ["ScanRDI", "Celsis", "USP 71"
 st.title(f"Investigation Wizard: {selection}")
 
 # --- DATA DICTIONARY ---
-# This dictionary will hold every value for the template
 data = {}
 
-# --- SECTION 1: GENERAL INFO (COMMON) ---
+# --- SECTION 1: GENERAL INFO ---
 st.header("1. General Test Details")
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -30,13 +29,12 @@ with col2:
 with col3:
     data["dosage_form"] = st.text_input("Dosage Form", "Injectable")
     data["test_record"] = st.text_input("Record Ref (e.g. 060925-1040)")
-    data["monthly_cleaning_date"] = st.text_input("Monthly Cleaning Date", "01Jun25")
+    data["monthly_cleaning_date"] = st.text_input("Monthly Cleaning Date")
 
-# --- SECTION 2: PLATFORM SPECIFIC ---
+# --- SECTION 2: SCANRDI SPECIFIC LOGIC ---
 if selection == "ScanRDI":
     st.header("2. Personnel & Equipment")
     
-    # Personnel
     p1, p2, p3, p4 = st.columns(4)
     with p1:
         data["prepper_name"] = st.text_input("Prepper Name")
@@ -51,25 +49,44 @@ if selection == "ScanRDI":
         data["reader_name"] = st.text_input("Reader Name")
         data["reader_initial"] = st.text_input("Reader Init")
 
-    # Equipment & Results
-    st.header("3. Findings & EM Data")
-    e1, e2, e3 = st.columns(3)
+    # Equipment Smart Lookup
+    st.subheader("Equipment & Facility (Auto-Fill)")
+    e1, e2 = st.columns(2)
     with e1:
-        data["scan_id"] = st.text_input("ScanRDI ID (last 4 digits)")
-        data["cr_id"] = st.text_input("Room ID (e.g. 117)")
-        data["cr_suit"] = st.text_input("Suite # (e.g. 117)")
-        data["bsc_id"] = st.text_input("BSC ID (last 4 digits)")
-    with e2:
-        data["control_positive"] = st.text_input("Pos Control", "B. subtilis")
-        data["control_lot"] = st.text_input("Control Lot")
-        data["control_data"] = st.text_input("Control Exp Date")
-        data["organism_morphology"] = st.text_input("Org Shape (rod/cocci)")
-    with e3:
-        data["weekly_initial"] = st.text_input("Weekly Monitor Initials")
-        data["date_of_weekly"] = st.text_input("Date of Weekly Monitoring")
+        # Selection includes your updated list
+        bsc_choice = st.selectbox("Select BSC ID", ["1310", "1309", "1311", "1312", "1314", "1313", "1316", "1798", "Other"])
+        data["bsc_id"] = bsc_choice if bsc_choice != "Other" else st.text_input("Enter Manual BSC ID")
+        
+        # Room Mapping Logic
+        if data["bsc_id"] in ["1310", "1309"]: 
+            data["cr_id"], data["cr_suit"] = "117", "117"
+        elif data["bsc_id"] in ["1311", "1312"]: 
+            data["cr_id"], data["cr_suit"] = "116", "116"
+        elif data["bsc_id"] in ["1314", "1313"]: 
+            data["cr_id"], data["cr_suit"] = "115", "115"
+        elif data["bsc_id"] in ["1316", "1798"]: 
+            data["cr_id"], data["cr_suit"] = "114", "114"
+        else:
+            data["cr_id"] = st.text_input("Room ID")
+            data["cr_suit"] = st.text_input("Suite #")
 
-    # Table 1 EM Observations
-    st.subheader("Table 1: EM Observations")
+        # Smart A/B Suffix & Description Logic (Even=B/Innermost, Odd=A/Middle)
+        try:
+            bsc_num = int(data["bsc_id"])
+            suffix = "B" if bsc_num % 2 == 0 else "A"
+            location_desc = "innermost ISO 7 room" if suffix == "B" else "middle ISO 7 buffer room"
+        except:
+            suffix = "B"
+            location_desc = "innermost ISO 7 room"
+
+        st.info(f"Automatically Mapped to Room {data['cr_id']} / Suite {data['cr_suit']}{suffix} ({location_desc})")
+
+    with e2:
+        data["scan_id"] = st.text_input("ScanRDI ID (last 4 digits)")
+        data["organism_morphology"] = st.selectbox("Org Shape", ["rod", "cocci", "yeast/mold"])
+
+    # Table 1 EM Bracketing (Mapping Source 184)
+    st.header("3. Table 1: EM Observations")
     em1, em2, em3 = st.columns(3)
     with em1:
         data["obs_pers_dur"] = st.text_input("Personnel Obs", "No Growth")
@@ -84,25 +101,42 @@ if selection == "ScanRDI":
         data["etx_sett_dur"] = st.text_input("Sett ETX #", "N/A")
         data["id_sett_dur"] = st.text_input("Sett ID", "N/A")
 
-    st.subheader("Weekly Results")
+    st.subheader("Weekly Bracketing")
     w1, w2 = st.columns(2)
     with w1:
         data["obs_air_wk_of"] = st.text_input("Weekly Air Obs", "No Growth")
         data["etx_air_wk_of"] = st.text_input("Air ETX #", "N/A")
         data["id_air_wk_of"] = st.text_input("Air ID", "N/A")
+        data["weekly_initial"] = st.text_input("Weekly Monitor Initials")
     with w2:
         data["obs_room_wk_of"] = st.text_input("Weekly Room Obs", "No Growth")
         data["etx_room_wk_of"] = st.text_input("Room ETX #", "N/A")
         data["id_room_wk_of"] = st.text_input("Room ID", "N/A")
+        data["date_of_weekly"] = st.text_input("Date of Weekly Monitoring")
 
-    # Narrative Summary Logic
-    st.header("4. Smart Summaries")
+    # Smart Narrative Calculation
     if st.button("🪄 Auto-Generate Narrative"):
+        # Mapping {{ equipment_summary }} (Source 182)
+        data["equipment_summary"] = (
+            f"The ISO 5 BSC E00{data['bsc_id']}, located in the {location_desc} "
+            f"(Suite {data['cr_suit']}{suffix}), was thoroughly cleaned and disinfected "
+            f"prior to procedures in accordance with SOP 2.600.018."
+        )
+        
+        # Mapping {{ narrative_summary }} and {{ em_details }} (Source 182)
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
-            data["narrative_summary"] = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling, surface sampling, or settling plates."
+            data["narrative_summary"] = (
+                "Upon analyzing the environmental monitoring results, no microbial growth was observed "
+                "in personal sampling (left touch and right touch), surface sampling, or settling plates."
+            )
+            data["em_details"] = (
+                "Weekly active air sampling and weekly surface sampling from both the week of testing "
+                "and the week before testing showed no microbial growth."
+            )
         else:
-            data["narrative_summary"] = "Microbial growth was observed during environmental monitoring as detailed below."
-        st.success("Narrative Prepared!")
+            data["narrative_summary"] = "Microbial growth was observed during environmental monitoring as detailed in Table 1."
+            data["em_details"] = "Growth details are provided in the attached EM identification reports."
+        st.success("Narratives Prepared!")
 
 # --- GENERATION ---
 if st.button("🚀 GENERATE REPORT"):
@@ -110,7 +144,7 @@ if st.button("🚀 GENERATE REPORT"):
     if os.path.exists(template_path):
         doc = DocxTemplate(template_path)
         
-        # Calculate bracketing dates
+        # Calculate bracketing dates (Source 184)
         try:
             dt = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt - timedelta(days=1)).strftime("%d%b%y")
@@ -125,4 +159,4 @@ if st.button("🚀 GENERATE REPORT"):
         with open(out_file, "rb") as f:
             st.download_button("📂 Download Final Report", f, file_name=out_file)
     else:
-        st.error(f"Template '{template_path}' missing from GitHub!")
+        st.error(f"Template '{template_path}' missing from GitHub folder!")
