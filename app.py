@@ -1,89 +1,93 @@
+import streamlit as st
+from docxtpl import DocxTemplate
 import os
 import json
 from datetime import datetime, timedelta
-import ipywidgets as widgets
-from docxtpl import DocxTemplate
-from IPython.display import display, clear_output
 
-# --- PART 1: DATA & HISTORY ---
-# This saves your progress so you don't have to re-type everything
-CURRENT_HISTORY_FILE = 'oos_wizard_history.json'
+# --- PART 1: UI SETUP ---
+st.set_page_config(page_title="Sterility OOS Wizard", layout="wide")
 
-def load_history():
-    if os.path.exists(CURRENT_HISTORY_FILE):
-        try:
-            with open(CURRENT_HISTORY_FILE, 'r') as f: return json.load(f)
-        except: return {}
-    return {}
+# Sidebar for Platform Selection (The Left Side)
+st.sidebar.title("OOS Platform")
+selection = st.sidebar.radio("Select Test Type:", ["ScanRDI", "Celsis", "USP 71"])
 
-def save_history(data_dict):
-    with open(CURRENT_HISTORY_FILE, 'w') as f: 
-        json.dump(data_dict, f)
+st.title(f"Sterility Investigation Wizard: {selection}")
 
-defaults = load_history()
-def get_val(key, fallback): 
-    return defaults.get(key, fallback)
+# --- PART 2: FORM FIELDS ---
+# We use st.columns to create the "Boxes"
+col1, col2 = st.columns(2)
 
-# --- PART 2: UI WIDGETS ---
-style = {'description_width': 'initial'}
-layout_full = widgets.Layout(width='98%')
-layout_half = widgets.Layout(width='48%')
+with col1:
+    oos_id = st.text_input("OOS Number", "OOS-250000")
+    client_name = st.text_input("Client Name")
+    sample_id = st.text_input("Sample ID")
 
-# Platform Selection (The Left Side Selector)
-platform_selector = widgets.ToggleButtons(
-    options=['ScanRDI', 'Celsis', 'USP 71'],
-    description='Select OS:',
-    button_style='info'
-)
+with col2:
+    test_date = st.text_input("Test Date (DDMonYY)", datetime.now().strftime("%d%b%y"))
+    sample_name = st.text_input("Sample Name")
+    lot_number = st.text_input("Lot Number")
 
-# Common Widgets (Used by all platforms)
-w_oos_id = widgets.Text(description="OOS Number:", value=get_val('oos_id', "OOS-250000"), style=style, layout=layout_full)
-w_client = widgets.Text(description="Client Name:", value=get_val('client_name', ""), style=style, layout=layout_full)
-w_sample_id = widgets.Text(description="Sample ID:", value=get_val('sample_id', ""), style=style, layout=layout_full)
-w_test_date = widgets.Text(description="Test Date (DDMonYY):", value=datetime.now().strftime("%d%b%y"), style=style, layout=layout_full)
+# --- PART 3: PLATFORM SPECIFIC LOGIC ---
+data = {
+    "oos_id": oos_id,
+    "client_name": client_name,
+    "sample_id": sample_id,
+    "test_date": test_date,
+    "sample_name": sample_name,
+    "lot_number": lot_number,
+}
 
-# ScanRDI Specific Widgets (Based on your template)
-w_prepper = widgets.Text(description="Prepper:", value=get_val('prepper_name', ""), style=style, layout=layout_half)
-w_analyst = widgets.Text(description="Processor:", value=get_val('analyst_name', ""), style=style, layout=layout_half)
-w_scan_id = widgets.Text(description="ScanRDI ID:", value=get_val('scan_id', ""), style=style, layout=layout_half)
-w_org_morph = widgets.Text(description="Org Shape:", value=get_val('organism_morphology', ""), style=style, layout=layout_half)
+if selection == "ScanRDI":
+    st.subheader("ScanRDI Specific Details")
+    c3, c4 = st.columns(2)
+    with c3:
+        data["prepper_name"] = st.text_input("Prepper Name")
+        data["prepper_initial"] = st.text_input("Prepper Initials")
+        data["analyst_name"] = st.text_input("Processor Name")
+        data["analyst_initial"] = st.text_input("Processor Initials")
+    with c4:
+        data["scan_id"] = st.text_input("ScanRDI ID (E00...)")
+        data["cr_suit"] = st.text_input("Suite/Room #")
+        data["bsc_id"] = st.text_input("BSC ID (E00...)")
+        data["organism_morphology"] = st.text_input("Org Shape", "rod")
+        # [cite_start]Ensure these keys exist for the template [cite: 182]
+        data["reader_name"] = data["analyst_name"] 
+        data["reader_initial"] = data["analyst_initial"]
+        data["changeover_name"] = "N/A"
+        data["changeover_initial"] = "N/A"
 
-# --- PART 3: DYNAMIC UI RENDERING ---
-output_form = widgets.Output()
+elif selection == "Celsis":
+    st.info("Celsis template and fields pending...")
+    
+elif selection == "USP 71":
+    st.info("USP 71 template and fields pending...")
 
-def render_form(change=None):
-    with output_form:
-        clear_output()
-        selection = platform_selector.value
-        display(widgets.HTML(f"<h2>{selection} Investigation Wizard</h2>"))
-        
-        # Section 1: General Information
-        display(widgets.HTML("<h3>1. General Details</h3>"), w_oos_id, w_client, w_sample_id, w_test_date)
-        
-        # Section 2: Platform Specific Fields
-        if selection == 'ScanRDI':
-            display(widgets.HTML("<h3>2. ScanRDI Specifics</h3>"))
-            display(widgets.HBox([w_prepper, w_analyst]))
-            display(widgets.HBox([w_scan_id, w_org_morph]))
-        elif selection == 'Celsis':
-            display(widgets.HTML("<h3>2. Celsis Specifics (Template Pending)</h3>"))
-            display(widgets.HTML("<p>Fields will be added here once the Celsis template is ready.</p>"))
-        elif selection == 'USP 71':
-            display(widgets.HTML("<h3>2. USP 71 Specifics (Template Pending)</h3>"))
-            display(widgets.HTML("<p>Fields will be added here once the USP 71 template is ready.</p>"))
-        
-        display(widgets.HTML("<br>"), btn_generate)
-
-btn_generate = widgets.Button(description="GENERATE & DOWNLOAD", button_style='success', layout=widgets.Layout(width='100%', height='50px'))
-
-# --- PART 4: GENERATION LOGIC ---
-def on_click_generate(b):
-    selection = platform_selector.value
+# --- PART 4: GENERATION ---
+if st.button("GENERATE & DOWNLOAD"):
     template_file = f"{selection} OOS template.docx"
     
-    # Check if template exists
     if not os.path.exists(template_file):
-        print(f"❌ Error: '{template_file}' not found! Please upload it to the same folder.")
-        return
-
-    # Data
+        st.error(f"Template file '{template_file}' not found in GitHub folder!")
+    else:
+        try:
+            doc = DocxTemplate(template_file)
+            
+            # [cite_start]Add bracketing dates automatically [cite: 184]
+            try:
+                dt = datetime.strptime(test_date, "%d%b%y")
+                data['date_before_test'] = (dt - timedelta(days=1)).strftime("%d%b%y")
+                data['date_after_test'] = (dt + timedelta(days=1)).strftime("%d%b%y")
+                data['date_of_weekly'] = test_date
+            except:
+                pass
+            
+            doc.render(data)
+            output_name = f"{oos_id}_{selection}_Report.docx"
+            doc.save(output_name)
+            
+            with open(output_name, "rb") as f:
+                st.download_button("Click here to Download", f, file_name=output_name)
+            st.success(f"Report Generated: {output_name}")
+            
+        except Exception as e:
+            st.error(f"Error: {e}")
