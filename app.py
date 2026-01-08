@@ -17,7 +17,7 @@ st.markdown("""
 # --- SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.title("🛡️ Sterility Platforms")
-    st.write("Click a platform to start:")
+    st.write("Select a platform:")
     
     if "active_platform" not in st.session_state:
         st.session_state.active_platform = "ScanRDI"
@@ -110,21 +110,20 @@ if selection == "ScanRDI":
         data["scan_id"] = st.text_input("ScanRDI ID (last 4 digits)")
         data["organism_morphology"] = st.selectbox("Org Shape", ["rod", "cocci", "yeast/mold"])
     with f2:
+        # Abbreviated names only as requested
         control_choices = [
-            "A. brasiliensis: Aspergillus brasiliensis",
-            "B. subtilis: Bacillus spizizenii (formerly Bacillus subtilis)",
-            "C. albicans: Candida albicans",
-            "C. sporogenes: Clostridium sporogenes",
-            "P. aeruginosa: Pseudomonas paraeruginosa (formerly Pseudomonas aeruginosa)",
-            "S. aureus: Staphylococcus aureus"
+            "A. brasiliensis",
+            "B. subtilis",
+            "C. albicans",
+            "C. sporogenes",
+            "P. aeruginosa",
+            "S. aureus"
         ]
-        selected_control = st.selectbox("Positive Control", control_choices)
-        # Logic to extract ONLY the abbreviation (e.g., C. albicans)
-        data["control_positive"] = selected_control.split(":")[0].strip()
+        data["control_positive"] = st.selectbox("Positive Control", control_choices)
         data["control_lot"] = st.text_input("Control Lot")
         data["control_data"] = st.text_input("Control Exp Date")
 
-    # Table 1 EM Data (Source 184)
+    # Table 1 EM Data mapping
     em_col1, em_col2, em_col3 = st.columns(3)
     with em_col1:
         data["obs_pers_dur"] = st.text_input("Personnel Obs", "No Growth")
@@ -153,13 +152,14 @@ if selection == "ScanRDI":
         data["date_of_weekly"] = st.text_input("Date of Weekly Monitoring")
 
     if st.button("🪄 Auto-Generate Narratives"):
-        # Mapping {{ equipment_summary }} based on Source 182
+        # Mapping {{ equipment_summary }} based on facility rules 
         data["equipment_summary"] = (
             f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} "
             f"(Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} "
             f"and the changeover step was conducted within the ISO 5 BSC in the {c_loc} "
             f"(Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         )
+        # Smart narrative logic for EM results 
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
             data["narrative_summary"] = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates."
             data["em_details"] = "Weekly active air sampling and weekly surface sampling from both the week of testing and the week before testing showed no microbial growth."
@@ -168,18 +168,27 @@ if selection == "ScanRDI":
             data["em_details"] = "Growth details are documented in the attached reports."
         st.success("Narratives Prepared!")
 
+elif selection == "Celsis":
+    st.header("Celsis Specific Fields")
+    st.info("Template and fields for Celsis will appear here.")
+
+elif selection == "USP 71":
+    st.header("USP 71 Specific Fields")
+    st.info("Template and fields for USP 71 will appear here.")
+
 # --- FINAL GENERATION ---
 if st.button("🚀 GENERATE FINAL REPORT"):
     template_name = f"{selection} OOS template.docx"
-    if os.path.exists(template_name):
-        doc = DocxTemplate(template_name)
+    if os.path.exists(template_path := template_name):
+        doc = DocxTemplate(template_path)
         try:
+            # Automatic bracketing dates 
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
         except: pass
         doc.render(data)
-        out_name = f"{data['oos_id']}_{selection}.docx"
+        out_name = f"{data['oos_id']}_{selection}_Report.docx"
         doc.save(out_name)
         with open(out_name, "rb") as f:
             st.download_button("📂 Download Final Document", f, file_name=out_name)
