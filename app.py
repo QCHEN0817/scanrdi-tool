@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Sterility OOS Wizard", layout="wide")
+st.set_page_config(page_title="Sterility Investigation Tool", layout="wide")
 
 # --- CUSTOM STYLING ---
 st.markdown("""
@@ -18,7 +18,6 @@ st.markdown("""
 def get_full_name(initials):
     if not initials:
         return ""
-    
     lookup = {
         "HS": "Halaina Smith", "DS": "Devanshi Shah", "GS": "Gabbie Surber",
         "MRB": "Muralidhar Bythatagari", "KSM": "Karla Silva", "DT": "Debrework Tassew",
@@ -42,8 +41,7 @@ with st.sidebar:
     st.divider()
     st.success(f"Active: {st.session_state.active_platform}")
 
-selection = st.session_state.active_platform
-st.title(f"Investigation Wizard: {selection}")
+st.title(f"Sterility Investigation & Reporting: {st.session_state.active_platform}")
 
 data = {}
 
@@ -53,21 +51,18 @@ col1, col2, col3 = st.columns(3)
 with col1:
     data["oos_id"] = st.text_input("OOS Number", "OOS-252503")
     data["client_name"] = st.text_input("Client Name", "Northmark Pharmacy")
-    data["sample_id"] = st.text_input("Sample ID (e.g. E12955)", "E12955")
+    data["sample_id"] = st.text_input("Sample ID", "E12955")
 with col2:
     data["test_date"] = st.text_input("Test Date (DDMonYY)", datetime.now().strftime("%d%b%y"))
     data["sample_name"] = st.text_input("Sample / Active Name")
     data["lot_number"] = st.text_input("Lot Number")
 with col3:
-    # Dosage Form options updated
     data["dosage_form"] = st.selectbox("Dosage Form", ["Injectable", "Aqueous Solution", "Liquid", "Solution"])
-    data["test_record"] = st.text_input("Record Ref (e.g. 060925-1040)")
     data["monthly_cleaning_date"] = st.text_input("Monthly Cleaning Date")
 
 # --- SECTION 2: SCANRDI SPECIFIC LOGIC ---
-if selection == "ScanRDI":
+if st.session_state.active_platform == "ScanRDI":
     st.header("2. Personnel & Changeover")
-    
     p1, p2, p3, p4 = st.columns(4)
     with p1:
         data["prepper_initial"] = st.text_input("Prepper Initials").upper()
@@ -92,7 +87,6 @@ if selection == "ScanRDI":
             suffix = "B" if num % 2 == 0 else "A"
             location = "innermost ISO 7 room" if suffix == "B" else "middle ISO 7 buffer room"
         except: suffix, location = "B", "innermost ISO 7 room"
-            
         if bsc_id in ["1310", "1309"]: room, suite = "117", "117"
         elif bsc_id in ["1311", "1312"]: room, suite = "116", "116"
         elif bsc_id in ["1314", "1313"]: room, suite = "115", "115"
@@ -106,7 +100,6 @@ if selection == "ScanRDI":
         p_room, p_suite, p_suffix, p_loc = get_room_logic(data["bsc_id"])
         data["cr_id"], data["cr_suit"] = p_room, p_suite
         st.caption(f"Processor: Suite {p_suite}{p_suffix} ({p_loc})")
-
     with e2:
         chg_bsc = st.selectbox("Select Changeover BSC ID", bsc_list)
         data["chgbsc_id"] = chg_bsc if chg_bsc != "Other" else st.text_input("Manual CHG BSC")
@@ -118,6 +111,15 @@ if selection == "ScanRDI":
     with f1:
         data["scan_id"] = st.selectbox("ScanRDI ID", ["1230", "2017", "1040", "1877", "2225", "2132"])
         data["organism_morphology"] = st.selectbox("Org Shape", ["rod", "cocci", "yeast/mold"])
+        
+        # --- AUTO-GENERATED RECORD REF ---
+        try:
+            date_part = datetime.strptime(data["test_date"], "%d%b%y").strftime("%m%d%y")
+            default_ref = f"{date_part}-{data['scan_id']}-"
+        except:
+            default_ref = ""
+        data["test_record"] = st.text_input("Record Ref", value=default_ref)
+
     with f2:
         data["control_positive"] = st.selectbox("Positive Control", ["A. brasiliensis", "B. subtilis", "C. albicans", "C. sporogenes", "P. aeruginosa", "S. aureus"])
         data["control_lot"] = st.text_input("Control Lot")
@@ -156,8 +158,10 @@ if selection == "ScanRDI":
     if 'narrative_summary' not in st.session_state: st.session_state.narrative_summary = ""
 
     if st.button("🪄 Auto-Generate Narratives"):
+        # Mapping {{ equipment_summary }} based on facility rules
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         
+        # Mapping {{ narrative_summary }} based on "No Growth" rule
         if data["obs_pers_dur"] == "No Growth" and data["obs_surf_dur"] == "No Growth":
             st.session_state.narrative_summary = (
                 "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), "
@@ -175,20 +179,17 @@ if selection == "ScanRDI":
 
 # --- FINAL GENERATION ---
 if st.button("🚀 GENERATE FINAL REPORT"):
-    template_name = f"{selection} OOS template.docx"
+    template_name = f"{st.session_state.active_platform} OOS template.docx"
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
         try:
+            # Bracketing dates calculation
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
         except: pass
-        
         doc.render(data)
-        
-        # Updated File Name Logic
-        out_name = f"{data['oos_id']} {data['client_name']} ({data['sample_id']}) - {selection}.docx"
-        
+        out_name = f"{data['oos_id']} {data['client_name']} ({data['sample_id']}) - {st.session_state.active_platform}.docx"
         doc.save(out_name)
         with open(out_name, "rb") as f:
             st.download_button("📂 Download Document", f, file_name=out_name)
