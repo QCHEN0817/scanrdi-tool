@@ -178,14 +178,14 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.id_air_weekly = st.text_input("Weekly Air ID", st.session_state.id_air_weekly)
         st.session_state.weekly_init = st.text_input("Weekly Monitor Initials", st.session_state.weekly_init)
     with wk2:
-        st.session_state.obs_room = st.text_input("Weekly Room Obs", st.session_state.obs_room)
+        # Changed label to Weekly Surf Obs
+        st.session_state.obs_room = st.text_input("Weekly Surf Obs", st.session_state.obs_room)
         st.session_state.etx_room_weekly = st.text_input("Weekly Surf ETX #", st.session_state.etx_room_weekly)
         st.session_state.id_room_weekly = st.text_input("Weekly Surf ID", st.session_state.id_room_weekly)
         st.session_state.date_weekly = st.text_input("Date of Weekly Monitoring", st.session_state.date_weekly)
 
     st.header("4. Automated Summaries")
     
-    # NEW: Sample History Input Boxes
     h1, h2 = st.columns(2)
     with h1:
         st.session_state.incidence_count = st.number_input("Number of Prior Failures (Incidences)", value=int(st.session_state.incidence_count), step=1)
