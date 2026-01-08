@@ -58,7 +58,7 @@ with col3:
     data["dosage_form"] = st.selectbox("Dosage Form", ["Injectable", "Aqueous Solution", "Liquid", "Solution"])
     data["monthly_cleaning_date"] = st.text_input("Monthly Cleaning Date")
 
-# --- SECTION 2: SCANRDI SPECIFIC LOGIC ---
+# --- SECTION 2: PERSONNEL & FACILITY ---
 if st.session_state.active_platform == "ScanRDI":
     st.header("2. Personnel & Changeover")
     p1, p2, p3, p4 = st.columns(4)
@@ -123,27 +123,27 @@ if st.session_state.active_platform == "ScanRDI":
     st.subheader("Table 1: EM Observations")
     em1, em2, em3 = st.columns(3)
     with em1:
-        data["obs_pers_dur"] = st.text_input("Personnel Obs", "No Growth")
+        data["obs_pers_dur"] = st.text_input("Personnel Obs", "")
         data["etx_pers_dur"] = st.text_input("Pers ETX #", "N/A")
         data["id_pers_dur"] = st.text_input("Pers ID", "N/A")
     with em2:
-        data["obs_surf_dur"] = st.text_input("Surface Obs", "No Growth")
+        data["obs_surf_dur"] = st.text_input("Surface Obs", "")
         data["etx_surf_dur"] = st.text_input("Surf ETX #", "N/A")
         data["id_surf_dur"] = st.text_input("Surf ID", "N/A")
     with em3:
-        data["obs_sett_dur"] = st.text_input("Settling Obs", "No Growth")
+        data["obs_sett_dur"] = st.text_input("Settling Obs", "")
         data["etx_sett_dur"] = st.text_input("Sett ETX #", "N/A")
         data["id_sett_dur"] = st.text_input("Sett ID", "N/A")
 
     st.subheader("Weekly Bracketing")
     wk1, wk2 = st.columns(2)
     with wk1:
-        data["obs_air_wk_of"] = st.text_input("Weekly Air Obs", "No Growth")
+        data["obs_air_wk_of"] = st.text_input("Weekly Air Obs", "")
         data["etx_air_wk_of"] = st.text_input("Air ETX #", "N/A")
         data["id_air_wk_of"] = st.text_input("Air ID", "N/A")
         data["weekly_initial"] = st.text_input("Weekly Monitor Initials")
     with wk2:
-        data["obs_room_wk_of"] = st.text_input("Weekly Room Obs", "No Growth")
+        data["obs_room_wk_of"] = st.text_input("Weekly Room Obs", "")
         data["etx_room_wk_of"] = st.text_input("Room ETX #", "N/A")
         data["id_room_wk_of"] = st.text_input("Room ID", "N/A")
         data["date_of_weekly"] = st.text_input("Date of Weekly Monitoring")
@@ -157,40 +157,53 @@ if st.session_state.active_platform == "ScanRDI":
         # Equipment Summary
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{data['bsc_id']}) by {data['analyst_name']} and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{data['chgbsc_id']}) by {data['changeover_name']}."
         
-        # SMART Narrative Splicing Logic
+        # Build "No Growth" Narrative Components (Smart Splicing)
         em_parts = []
-        if data["obs_pers_dur"] == "No Growth": em_parts.append("personal sampling (left touch and right touch)")
-        if data["obs_surf_dur"] == "No Growth": em_parts.append("surface sampling")
-        if data["obs_sett_dur"] == "No Growth": em_parts.append("settling plates")
+        if not data["obs_pers_dur"].strip(): em_parts.append("personal sampling (left touch and right touch)")
+        if not data["obs_surf_dur"].strip(): em_parts.append("surface sampling")
+        if not data["obs_sett_dur"].strip(): em_parts.append("settling plates")
         
         weekly_parts = []
-        if data["obs_air_wk_of"] == "No Growth": weekly_parts.append("weekly active air sampling")
-        if data["obs_room_wk_of"] == "No Growth": weekly_parts.append("weekly surface sampling")
+        if not data["obs_air_wk_of"].strip(): weekly_parts.append("weekly active air sampling")
+        if not data["obs_room_wk_of"].strip(): weekly_parts.append("weekly surface sampling")
 
-        # Build Narrative Summary
-        if len(em_parts) == 3 and len(weekly_parts) == 2:
+        # Check for growth based on non-blank input
+        growth_sources = []
+        if data["obs_pers_dur"].strip(): growth_sources.append(("Personnel Sampling", data["obs_pers_dur"], data["etx_pers_dur"], data["id_pers_dur"]))
+        if data["obs_surf_dur"].strip(): growth_sources.append(("Surface Sampling", data["obs_surf_dur"], data["etx_surf_dur"], data["id_surf_dur"]))
+        if data["obs_sett_dur"].strip(): growth_sources.append(("Settling Plates", data["obs_sett_dur"], data["etx_sett_dur"], data["id_sett_dur"]))
+        if data["obs_air_wk_of"].strip(): growth_sources.append(("Weekly Active Air Sampling", data["obs_air_wk_of"], data["etx_air_wk_of"], data["id_air_wk_of"]))
+        if data["obs_room_wk_of"].strip(): growth_sources.append(("Weekly Room Surface Sampling", data["obs_room_wk_of"], data["etx_room_wk_of"], data["id_room_wk_of"]))
+
+        if not growth_sources:
             st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling showed no microbial growth."
-            st.session_state.em_details = "" # Completely cleared when no growth
+            st.session_state.em_details = ""
         else:
-            # Case where there is at least one growth
+            # Construct Narrative Summary based on what is CLEAN
             summary_text = "Upon analyzing the environmental monitoring results, "
             if em_parts:
                 summary_text += "no microbial growth was observed in " + ", ".join(em_parts[:-1]) + (", and " if len(em_parts) > 1 else "") + em_parts[-1] + ". "
             else:
-                summary_text += "microbial growth was observed in all daily monitoring categories. "
+                summary_text += "microbial growth was observed during the testing period. "
             
             if weekly_parts:
                 summary_text += "Additionally, " + " and ".join(weekly_parts) + " showed no microbial growth."
-            
             st.session_state.narrative_summary = summary_text
-            # Populate EM Details because growth exists
-            st.session_state.em_details = "Microbial growth was observed during environmental monitoring. Identification and corrective action details are documented in the attached reports."
+
+            # Construct EM Details Paragraph for GROWTH
+            details_list = []
+            for category, obs, etx, org_id in growth_sources:
+                para = (f"However, microbial growths were observed in {category} during the week of testing. "
+                        f"Specifically, {obs}. The plates were submitted for microbial identification under sample IDs "
+                        f"{etx}. The organisms identified included {org_id}.")
+                details_list.append(para)
+            st.session_state.em_details = "\n\n".join(details_list)
         
         st.rerun()
 
     data["equipment_summary"] = st.session_state.equipment_summary
     data["narrative_summary"] = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=150)
-    data["em_details"] = st.text_area("EM Details (Editable)", value=st.session_state.em_details, height=100)
+    data["em_details"] = st.text_area("EM Details (Editable)", value=st.session_state.em_details, height=150)
 
 # --- FINAL GENERATION ---
 if st.button("🚀 GENERATE FINAL REPORT"):
@@ -198,10 +211,12 @@ if st.button("🚀 GENERATE FINAL REPORT"):
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
         try:
-            # Bracketing dates calculation
             dt_obj = datetime.strptime(data["test_date"], "%d%b%y")
             data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
             data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
+            # Final Check: replace blank observations with "No Growth" for the Word Doc table
+            for key in ["obs_pers_dur", "obs_surf_dur", "obs_sett_dur", "obs_air_wk_of", "obs_room_wk_of"]:
+                if not data[key].strip(): data[key] = "No Growth"
         except: pass
         doc.render(data)
         out_name = f"{data['oos_id']} {data['client_name']} ({data['sample_id']}) - {st.session_state.active_platform}.docx"
