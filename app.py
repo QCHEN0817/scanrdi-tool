@@ -6,6 +6,7 @@ from docxtpl import DocxTemplate
 from IPython.display import display, clear_output
 
 # --- PART 1: DATA & HISTORY ---
+# This saves your progress so you don't have to re-type everything
 CURRENT_HISTORY_FILE = 'oos_wizard_history.json'
 
 def load_history():
@@ -28,20 +29,20 @@ style = {'description_width': 'initial'}
 layout_full = widgets.Layout(width='98%')
 layout_half = widgets.Layout(width='48%')
 
-# Platform Selection (Left-side Sidebar logic)
+# Platform Selection (The Left Side Selector)
 platform_selector = widgets.ToggleButtons(
     options=['ScanRDI', 'Celsis', 'USP 71'],
     description='Select OS:',
     button_style='info'
 )
 
-# General Info (Common to all)
+# Common Widgets (Used by all platforms)
 w_oos_id = widgets.Text(description="OOS Number:", value=get_val('oos_id', "OOS-250000"), style=style, layout=layout_full)
 w_client = widgets.Text(description="Client Name:", value=get_val('client_name', ""), style=style, layout=layout_full)
 w_sample_id = widgets.Text(description="Sample ID:", value=get_val('sample_id', ""), style=style, layout=layout_full)
 w_test_date = widgets.Text(description="Test Date (DDMonYY):", value=datetime.now().strftime("%d%b%y"), style=style, layout=layout_full)
 
-# ScanRDI Specific Widgets [cite: 181, 182]
+# ScanRDI Specific Widgets (Based on your template)
 w_prepper = widgets.Text(description="Prepper:", value=get_val('prepper_name', ""), style=style, layout=layout_half)
 w_analyst = widgets.Text(description="Processor:", value=get_val('analyst_name', ""), style=style, layout=layout_half)
 w_scan_id = widgets.Text(description="ScanRDI ID:", value=get_val('scan_id', ""), style=style, layout=layout_half)
@@ -65,11 +66,11 @@ def render_form(change=None):
             display(widgets.HBox([w_prepper, w_analyst]))
             display(widgets.HBox([w_scan_id, w_org_morph]))
         elif selection == 'Celsis':
-            display(widgets.HTML("<h3>2. Celsis Specifics</h3>"))
-            display(widgets.Text(description="Luminometer ID:", style=style, layout=layout_full))
+            display(widgets.HTML("<h3>2. Celsis Specifics (Template Pending)</h3>"))
+            display(widgets.HTML("<p>Fields will be added here once the Celsis template is ready.</p>"))
         elif selection == 'USP 71':
-            display(widgets.HTML("<h3>2. USP 71 Specifics</h3>"))
-            display(widgets.Text(description="Incubation Room:", style=style, layout=layout_full))
+            display(widgets.HTML("<h3>2. USP 71 Specifics (Template Pending)</h3>"))
+            display(widgets.HTML("<p>Fields will be added here once the USP 71 template is ready.</p>"))
         
         display(widgets.HTML("<br>"), btn_generate)
 
@@ -78,36 +79,11 @@ btn_generate = widgets.Button(description="GENERATE & DOWNLOAD", button_style='s
 # --- PART 4: GENERATION LOGIC ---
 def on_click_generate(b):
     selection = platform_selector.value
-    template_file = f"{selection} OOS template.docx" [cite: 182]
+    template_file = f"{selection} OOS template.docx"
     
+    # Check if template exists
     if not os.path.exists(template_file):
-        print(f"❌ Error: {template_file} not found! Upload the template to GitHub.")
+        print(f"❌ Error: '{template_file}' not found! Please upload it to the same folder.")
         return
 
-    # Data Mapping [cite: 182, 184]
-    data = {
-        'oos_id': w_oos_id.value,
-        'client_name': w_client.value,
-        'sample_id': w_sample_id.value,
-        'test_date': w_test_date.value,
-        'prepper_name': w_prepper.value,
-        'analyst_name': w_analyst.value,
-        'scan_id': w_scan_id.value,
-        'organism_morphology': w_org_morph.value
-    }
-
-    try:
-        doc = DocxTemplate(template_file)
-        doc.render(data)
-        output_name = f"{w_oos_id.value}_{selection}.docx"
-        doc.save(output_name)
-        print(f"✅ Created: {output_name}")
-        save_history(data)
-    except Exception as e:
-        print(f"❌ Error: {e}")
-
-platform_selector.observe(render_form, names='value')
-btn_generate.on_click(on_click_generate)
-
-display(platform_selector, output_form)
-render_form()
+    # Data
