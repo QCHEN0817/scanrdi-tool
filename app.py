@@ -81,7 +81,8 @@ with col2:
     st.session_state.lot_number = st.text_input("Lot Number", st.session_state.lot_number)
 with col3:
     dosage_options = ["Injectable", "Aqueous Solution", "Liquid", "Solution"]
-    st.session_state.dosage_form = st.selectbox("Dosage Form", dosage_options, index=dosage_options.index(st.session_state.dosage_form) if st.session_state.dosage_form in dosage_options else 0)
+    idx = dosage_options.index(st.session_state.dosage_form) if st.session_state.dosage_form in dosage_options else 0
+    st.session_state.dosage_form = st.selectbox("Dosage Form", dosage_options, index=idx)
     st.session_state.monthly_cleaning_date = st.text_input("Monthly Cleaning Date", st.session_state.monthly_cleaning_date)
 
 # --- SECTION 2: PERSONNEL & FACILITY ---
@@ -190,23 +191,24 @@ if st.session_state.active_platform == "ScanRDI":
         # 1. Equipment Summary
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {analyst_full}, and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {changeover_full}."
         
-        # 2. History Logic
+        # 2. History Logic (Strict Singular vs Plural)
         if st.session_state.incidence_count == 0:
-            hist_result = "has had no prior failures"
+            hist_phrase = "has had no prior failures"
         elif st.session_state.incidence_count == 1:
-            hist_result = f"has had 1 incidence of positive results ({st.session_state.oos_refs})"
+            hist_phrase = f"has had 1 incidence of a positive result ({st.session_state.oos_refs})"
         else:
-            hist_result = f"has had {st.session_state.incidence_count} incidences of positive results ({st.session_state.oos_refs})"
+            hist_phrase = f"has had {st.session_state.incidence_count} incidences of positive results ({st.session_state.oos_refs})"
         
-        st.session_state.sample_history_para = f"Analyzing a 6-month sample history for {st.session_state.client_name} ({st.session_state.sample_id}), this specific analyte “{st.session_state.sample_name}” {hist_result} using the Scan RDI method during this period."
+        st.session_state.sample_history_para = f"Analyzing a 6-month sample history for {st.session_state.client_name} ({st.session_state.sample_id}), this specific analyte “{st.session_state.sample_name}” {hist_phrase} using the Scan RDI method during this period."
 
-        # 3. Narrative Logic
+        # 3. Narrative/EM Growth Logic
         growth_sources = []
         if st.session_state.obs_pers.strip(): growth_sources.append(("Personnel Sampling", st.session_state.obs_pers, st.session_state.etx_pers, st.session_state.id_pers))
         if st.session_state.obs_surf.strip(): growth_sources.append(("Surface Sampling", st.session_state.obs_surf, st.session_state.etx_surf, st.session_state.id_surf))
         if st.session_state.obs_sett.strip(): growth_sources.append(("Settling Plates", st.session_state.obs_sett, st.session_state.etx_sett, st.session_state.id_sett))
         if st.session_state.obs_air.strip(): growth_sources.append(("Weekly Active Air Sampling", st.session_state.obs_air, st.session_state.etx_air_weekly, st.session_state.id_air_weekly))
-        if st.session_state.obs_room.strip(): growth_sources.append(("Surface Sampling of Cleanrooms during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room_weekly, st.session_state.id_room_weekly))
+        # SINGULAR Corrected: surface sampling of cleanroom
+        if st.session_state.obs_room.strip(): growth_sources.append(("surface sampling of cleanroom during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room_weekly, st.session_state.id_room_weekly))
 
         if not growth_sources:
             st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling showed no microbial growth."
@@ -227,16 +229,16 @@ if st.session_state.active_platform == "ScanRDI":
             details_list = []
             for category, obs, etx, org_id in growth_sources:
                 obs_up = obs.upper()
-                is_sing = ("1" in obs and "CFU" in obs_up and "11" not in obs)
-                growth_w = "growth was" if is_sing else "growths were"
-                is_mult_etx = ("," in etx or "AND" in etx.upper() or " " in etx.strip())
-                id_w = "sample IDs" if is_mult_etx else "sample ID"
-                is_mult_org = ("," in org_id or "AND" in org_id.upper())
-                org_w = "organisms identified included" if is_mult_org else "organism identified was"
+                is_sing_count = ("1" in obs and "CFU" in obs_up and "11" not in obs and "21" not in obs)
                 
-                para = (f"However, microbial {growth_w} observed in {category} the week of testing. "
-                        f"Specifically, {obs}. The plates were submitted for microbial identification under {id_w} "
-                        f"{etx}. The {org_w} {org_id}.")
+                growth_term = "growth was" if is_sing_count else "growths were"
+                plate_term = "plate was" if is_sing_count else "plates were"
+                id_label = "sample IDs" if ("," in etx or "AND" in etx.upper()) else "sample ID"
+                org_verb = "organisms identified included" if ("," in org_id or "AND" in org_id.upper()) else "organism identified was"
+                
+                para = (f"However, microbial {growth_term} observed in {category} the week of testing. "
+                        f"Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} "
+                        f"{etx}. The {org_verb} {org_id}.")
                 details_list.append(para)
             st.session_state.em_details = "\n\n".join(details_list)
         st.rerun()
