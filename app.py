@@ -1,6 +1,7 @@
 import streamlit as st
 from docxtpl import DocxTemplate
 import os
+import re
 from datetime import datetime, timedelta
 
 # --- PAGE CONFIG ---
@@ -46,14 +47,45 @@ field_keys = [
 ]
 
 for k in field_keys:
-    if k == "oos_id": init_state(k, "OOS-252503")
-    elif k == "client_name": init_state(k, "Northmark Pharmacy")
-    elif k == "sample_id": init_state(k, "E12955")
+    if k == "oos_id": init_state(k, "OOS-260055")
+    elif k == "client_name": init_state(k, "Reshape Rx Houston")
+    elif k == "sample_id": init_state(k, "E74105")
     elif k == "test_date": init_state(k, datetime.now().strftime("%d%b%y"))
-    elif k == "dosage_form": init_state(k, "Injectable")
-    elif k == "incidence_count": init_state(k, 0)
     elif "etx" in k or "id" in k: init_state(k, "N/A")
     else: init_state(k, "")
+
+# --- EMAIL PARSER LOGIC ---
+def parse_email_text(text):
+    # Regex Patterns
+    oos_match = re.search(r"OOS-(\d+)", text)
+    client_match = re.search(r"([A-Za-z\s]+)\((E\d+)\)", text)
+    sample_match = re.search(r"Sample\s*Name:\s*(.*)", text, re.IGNORECASE)
+    lot_match = re.search(r"Lot:\s*(\w+)", text, re.IGNORECASE)
+    date_match = re.search(r"testing\s*on\s*(\d{2}\s*\w{3}\s*\d{4})", text, re.IGNORECASE)
+    shape_match = re.search(r"morphology\s*-\s*([A-Za-z\s]+)", text, re.IGNORECASE)
+    analyst_match = re.search(r"\(\s*([A-Z]{2,3})\s*\d+[a-z]{2}\s*Sample\)", text)
+
+    if oos_match: st.session_state.oos_id = f"OOS-{oos_match.group(1)}"
+    if client_match:
+        st.session_state.client_name = client_match.group(1).strip()
+        st.session_state.sample_id = client_match.group(2).strip()
+    if sample_match: st.session_state.sample_name = sample_match.group(1).strip()
+    if lot_match: st.session_state.lot_number = lot_match.group(1).strip()
+    if date_match:
+        try:
+            d_raw = date_match.group(1).strip()
+            # Convert "07 Jan 2026" to "07Jan26"
+            d_obj = datetime.strptime(d_raw, "%d %b %Y")
+            st.session_state.test_date = d_obj.strftime("%d%b%y")
+        except: pass
+    if shape_match:
+        shape_str = shape_match.group(1).lower()
+        if "rod" in shape_str: st.session_state.org_choice = "rod"
+        elif "cocci" in shape_str: st.session_state.org_choice = "cocci"
+        else:
+            st.session_state.org_choice = "Other"
+            st.session_state.manual_org = shape_str.strip()
+    if analyst_match: st.session_state.analyst_initial = analyst_match.group(1).strip()
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -67,6 +99,14 @@ with st.sidebar:
     st.success(f"Active: {st.session_state.active_platform}")
 
 st.title(f"Sterility Investigation & Reporting: {st.session_state.active_platform}")
+
+# --- NEW: SMART PARSER BOX ---
+st.header("📧 Smart Email Import")
+email_input = st.text_area("Paste the OOS Notification email here to auto-fill fields:", height=150)
+if st.button("🪄 Parse Email & Auto-Fill"):
+    if email_input:
+        parse_email_text(email_input)
+        st.rerun()
 
 # --- SECTION 1: GENERAL INFO ---
 st.header("1. General Test Details")
@@ -91,20 +131,17 @@ if st.session_state.active_platform == "ScanRDI":
     p1, p2, p3, p4 = st.columns(4)
     with p1:
         st.session_state.prepper_initial = st.text_input("Prepper Initials", st.session_state.prepper_initial).upper()
-        prepper_full = get_full_name(st.session_state.prepper_initial)
-        st.text_input("Prepper Full Name", value=prepper_full, disabled=True)
+        st.text_input("Prepper Full Name", value=get_full_name(st.session_state.prepper_initial), disabled=True)
     with p2:
         st.session_state.analyst_initial = st.text_input("Processor Initials", st.session_state.analyst_initial).upper()
         analyst_full = get_full_name(st.session_state.analyst_initial)
         st.text_input("Processor Full Name", value=analyst_full, disabled=True)
     with p3:
         st.session_state.changeover_initial = st.text_input("Changeover Initials", st.session_state.changeover_initial).upper()
-        changeover_full = get_full_name(st.session_state.changeover_initial)
-        st.text_input("Changeover Full Name", value=changeover_full, disabled=True)
+        st.text_input("Changeover Full Name", value=get_full_name(st.session_state.changeover_initial), disabled=True)
     with p4:
         st.session_state.reader_initial = st.text_input("Reader Initials", st.session_state.reader_initial).upper()
-        reader_full = get_full_name(st.session_state.reader_initial)
-        st.text_input("Reader Full Name", value=reader_full, disabled=True)
+        st.text_input("Reader Full Name", value=get_full_name(st.session_state.reader_initial), disabled=True)
 
     def get_room_logic(bsc_id):
         try:
@@ -112,7 +149,6 @@ if st.session_state.active_platform == "ScanRDI":
             suffix = "B" if num % 2 == 0 else "A"
             location = "innermost ISO 7 room" if suffix == "B" else "middle ISO 7 buffer room"
         except: suffix, location = "B", "innermost ISO 7 room"
-        
         if bsc_id in ["1310", "1309"]: room, suite = "117", "117"
         elif bsc_id in ["1311", "1312"]: room, suite = "116", "116"
         elif bsc_id in ["1314", "1313"]: room, suite = "115", "115"
@@ -189,9 +225,9 @@ if st.session_state.active_platform == "ScanRDI":
 
     if st.button("🪄 Auto-Generate All"):
         # 1. Equipment Summary
-        st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {analyst_full}, and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {changeover_full}."
+        st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {get_full_name(st.session_state.analyst_initial)}, and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {get_full_name(st.session_state.changeover_initial)}."
         
-        # 2. History Logic (Strict Singular vs Plural)
+        # 2. History Logic
         if st.session_state.incidence_count == 0:
             hist_phrase = "has had no prior failures"
         elif st.session_state.incidence_count == 1:
@@ -201,13 +237,12 @@ if st.session_state.active_platform == "ScanRDI":
         
         st.session_state.sample_history_para = f"Analyzing a 6-month sample history for {st.session_state.client_name} ({st.session_state.sample_id}), this specific analyte “{st.session_state.sample_name}” {hist_phrase} using the Scan RDI method during this period."
 
-        # 3. Narrative/EM Growth Logic
+        # 3. Narrative/EM Logic
         growth_sources = []
         if st.session_state.obs_pers.strip(): growth_sources.append(("Personnel Sampling", st.session_state.obs_pers, st.session_state.etx_pers, st.session_state.id_pers))
         if st.session_state.obs_surf.strip(): growth_sources.append(("Surface Sampling", st.session_state.obs_surf, st.session_state.etx_surf, st.session_state.id_surf))
         if st.session_state.obs_sett.strip(): growth_sources.append(("Settling Plates", st.session_state.obs_sett, st.session_state.etx_sett, st.session_state.id_sett))
         if st.session_state.obs_air.strip(): growth_sources.append(("Weekly Active Air Sampling", st.session_state.obs_air, st.session_state.etx_air_weekly, st.session_state.id_air_weekly))
-        # SINGULAR Corrected: surface sampling of cleanroom
         if st.session_state.obs_room.strip(): growth_sources.append(("surface sampling of cleanroom during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room_weekly, st.session_state.id_room_weekly))
 
         if not growth_sources:
@@ -217,29 +252,22 @@ if st.session_state.active_platform == "ScanRDI":
             em_clean = [p for p, obs in [("personal sampling (left touch and right touch)", st.session_state.obs_pers), ("surface sampling", st.session_state.obs_surf), ("settling plates", st.session_state.obs_sett)] if not obs.strip()]
             wk_clean = [p for p, obs in [("weekly active air sampling", st.session_state.obs_air), ("weekly surface sampling", st.session_state.obs_room)] if not obs.strip()]
 
-            summary_text = "Upon analyzing the environmental monitoring results, "
+            sum_text = "Upon analyzing the environmental monitoring results, "
             if em_clean:
-                summary_text += "no microbial growth was observed in " + ", ".join(em_clean[:-1]) + (", and " if len(em_clean) > 1 else "") + em_clean[-1] + ". "
-            else:
-                summary_text += "microbial growth was observed during the testing period. "
-            if wk_clean:
-                summary_text += "Additionally, " + " and ".join(wk_clean) + " showed no microbial growth."
-            st.session_state.narrative_summary = summary_text
+                sum_text += "no microbial growth was observed in " + ", ".join(em_clean[:-1]) + (", and " if len(em_clean) > 1 else "") + em_clean[-1] + ". "
+            else: sum_text += "microbial growth was observed during the testing period. "
+            if wk_clean: sum_text += "Additionally, " + " and ".join(wk_clean) + " showed no microbial growth."
+            st.session_state.narrative_summary = sum_text
 
             details_list = []
             for category, obs, etx, org_id in growth_sources:
                 obs_up = obs.upper()
                 is_sing_count = ("1" in obs and "CFU" in obs_up and "11" not in obs and "21" not in obs)
-                
                 growth_term = "growth was" if is_sing_count else "growths were"
                 plate_term = "plate was" if is_sing_count else "plates were"
                 id_label = "sample IDs" if ("," in etx or "AND" in etx.upper()) else "sample ID"
                 org_verb = "organisms identified included" if ("," in org_id or "AND" in org_id.upper()) else "organism identified was"
-                
-                para = (f"However, microbial {growth_term} observed in {category} the week of testing. "
-                        f"Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} "
-                        f"{etx}. The {org_verb} {org_id}.")
-                details_list.append(para)
+                details_list.append(f"However, microbial {growth_term} observed in {category} the week of testing. Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} {etx}. The {org_verb} {org_id}.")
             st.session_state.em_details = "\n\n".join(details_list)
         st.rerun()
 
@@ -253,6 +281,8 @@ if st.button("🚀 GENERATE FINAL REPORT"):
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
         final_data = {k: v for k, v in st.session_state.items()}
+        # Analyst Full Name check
+        final_data["analyst_name"] = get_full_name(st.session_state.analyst_initial)
         for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
             if not final_data[key].strip(): final_data[key] = "No Growth"
         try:
