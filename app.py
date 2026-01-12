@@ -42,20 +42,20 @@ field_keys = [
     "changeover_initial", "changeover_name",
     "reader_initial", "reader_name",
     "bsc_id", "chgbsc_id", "scan_id", 
-    "shift_number", # Added Shift Number
+    "shift_number", # Shift Number
     "org_choice", "manual_org", "test_record", "control_pos", "control_lot", 
     "control_exp", "obs_pers", "etx_pers", "id_pers", "obs_surf", "etx_surf", 
     "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air_weekly", 
     "id_air_weekly", "obs_room", "etx_room_weekly", "id_room_weekly", "weekly_init", 
     "date_weekly", "equipment_summary", "narrative_summary", "em_details", 
-    "sample_history", "incidence_count", "oos_refs"
+    "sample_history", "sample_history_full_preview", "incidence_count", "oos_refs"
 ]
 
 for k in field_keys:
     if k == "incidence_count":
         init_state(k, 0)
     elif k == "shift_number":
-        init_state(k, "1") # Default shift is 1
+        init_state(k, "1")
     elif "etx" in k or "id" in k:
         init_state(k, "N/A")
     else:
@@ -180,7 +180,7 @@ if st.session_state.active_platform == "ScanRDI":
         scan_ids = ["1230", "2017", "1040", "1877", "2225", "2132"]
         st.session_state.scan_id = st.selectbox("ScanRDI ID", scan_ids, index=scan_ids.index(st.session_state.scan_id) if st.session_state.scan_id in scan_ids else 0)
         
-        # --- NEW SHIFT NUMBER INPUT ---
+        # Shift Number Input
         st.session_state.shift_number = st.text_input("Shift Number", st.session_state.shift_number)
 
         shape_opts = ["rod", "cocci", "Other"]
@@ -188,10 +188,9 @@ if st.session_state.active_platform == "ScanRDI":
         if st.session_state.org_choice == "Other":
             st.session_state.manual_org = st.text_input("Enter Manual Org Shape", st.session_state.manual_org)
         
-        # --- UPDATED RECORD REF LOGIC ---
+        # Record Ref Logic: Date-ScanID-Shift
         try:
             date_part = datetime.strptime(st.session_state.test_date, "%d%b%y").strftime("%m%d%y")
-            # Format: MMDDYY-ScanID-Shift
             st.session_state.test_record = f"{date_part}-{st.session_state.scan_id}-{st.session_state.shift_number}"
         except: pass
         st.text_input("Record Ref", st.session_state.test_record, disabled=True)
@@ -250,6 +249,8 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.sample_history = f"1 incident ({st.session_state.oos_refs})"
         else:
             st.session_state.sample_history = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
+        
+        st.session_state.sample_history_full_preview = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” has had {st.session_state.sample_history} using the Scan RDI method during this period."
 
         # 3. Narrative/EM Logic
         growth_sources = []
@@ -282,4 +283,31 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.em_details = "\n\n".join(details_list)
         st.rerun()
 
-    st.session_state.sample_history = st.text_area
+    st.session_state.equipment_summary = st.text_area("Equipment Summary (Editable)", value=st.session_state.equipment_summary, height=120)
+    
+    st.info(f"**Sample History Preview (Full Context):** {st.session_state.sample_history_full_preview}")
+    st.session_state.sample_history = st.text_area("Sample History Fragment (Editable for Docx)", value=st.session_state.sample_history, height=70)
+    
+    st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=120)
+    st.session_state.em_details = st.text_area("EM Growth Details (Editable)", value=st.session_state.em_details, height=150)
+
+# --- FINAL GENERATION ---
+if st.button("🚀 GENERATE FINAL REPORT"):
+    template_name = f"{st.session_state.active_platform} OOS template.docx"
+    if os.path.exists(template_name):
+        doc = DocxTemplate(template_name)
+        final_data = {k: v for k, v in st.session_state.items()}
+        final_data["oos_full"] = f"OOS-{st.session_state.oos_id}"
+        
+        for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
+            if not final_data[key].strip(): final_data[key] = "No Growth"
+        try:
+            dt_obj = datetime.strptime(st.session_state.test_date, "%d%b%y")
+            final_data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
+            final_data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
+        except: pass
+        doc.render(final_data)
+        out_name = f"OOS-{st.session_state.oos_id} {st.session_state.client_name} ({st.session_state.sample_id}) - {st.session_state.active_platform}.docx"
+        doc.save(out_name)
+        with open(out_name, "rb") as f:
+            st.download_button("📂 Download Document", f, file_name=out_name)
