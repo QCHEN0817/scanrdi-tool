@@ -184,6 +184,7 @@ def generate_cross_contam_text():
         return f"{ids_str} were the {count_word} samples tested positive for microbial growth. The analyst confirmed that these samples were not processed concurrently, sequentially, or within the same manifold run. Specifically, {details_str}. The analyst also verified that gloves were thoroughly disinfected between samples. Furthermore, all other samples processed by the analyst that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
 
 def generate_narrative_and_details():
+    # 1. Identify Failures
     failures = []
     if st.session_state.obs_pers.strip():
         failures.append({"cat": "personnel sampling", "obs": st.session_state.obs_pers, "etx": st.session_state.etx_pers, "id": st.session_state.id_pers, "time": "daily"})
@@ -196,6 +197,7 @@ def generate_narrative_and_details():
     if st.session_state.obs_room.strip():
         failures.append({"cat": "weekly surface sampling", "obs": st.session_state.obs_room, "etx": st.session_state.etx_room_weekly, "id": st.session_state.id_room_wk_of, "time": "weekly"})
 
+    # 2. Build "Pass" Narrative
     pass_em_clean = []
     if not st.session_state.obs_pers.strip(): pass_em_clean.append("personal sampling (left touch and right touch)")
     if not st.session_state.obs_surf.strip(): pass_em_clean.append("surface sampling")
@@ -227,8 +229,10 @@ def generate_narrative_and_details():
         elif not pass_em_clean:
              narr += f"However, {wk_str} showed no microbial growth."
 
+    # 3. Build "Fail" Narrative (Combined Paragraph)
     det = ""
     if failures:
+        # Build Intro
         daily_fails = [f["cat"] for f in failures if f['time'] == 'daily']
         weekly_fails = [f["cat"] for f in failures if f['time'] == 'weekly']
         
@@ -250,21 +254,25 @@ def generate_narrative_and_details():
         else:
             fail_intro = f"However, microbial growth was observed during {intro_parts[0]}."
         
-        detail_parts = []
-        for f in failures:
-            # CORRECTED GRAMMAR AS REQUESTED
-            part = f"{f['obs']} was detected during {f['cat']} and was submitted for microbial identification under sample ID {f['etx']}, where the organism was identified as {f['id']}"
-            detail_parts.append(part)
-        
-        if len(detail_parts) == 1:
-            fail_specifics = f"Specifically, {detail_parts[0]}."
-        elif len(detail_parts) == 2:
-            fail_specifics = f"Specifically, {detail_parts[0]}, and {detail_parts[1]}."
-        else:
-            joined_prev = ", ".join(detail_parts[:-1])
-            fail_specifics = f"Specifically, {joined_prev}, and {detail_parts[-1]}."
+        # Build Details - NEW SENTENCE STRUCTURE & CONNECTORS
+        detail_sentences = []
+        for i, f in enumerate(failures):
+            # Base Sentence Structure (New)
+            base_sentence = f"{f['obs']} was detected during {f['cat']} and was submitted for microbial identification under sample ID {f['etx']}, where the organism was identified as {f['id']}"
             
-        det = f"{fail_intro} {fail_specifics}"
+            # Add Connector
+            if i == 0:
+                full_sent = f"Specifically, {base_sentence}."
+            elif i == 1:
+                full_sent = f"Additionally, {base_sentence}."
+            elif i == 2:
+                full_sent = f"Furthermore, {base_sentence}."
+            else:
+                full_sent = f"Also, {base_sentence}."
+            
+            detail_sentences.append(full_sent)
+            
+        det = f"{fail_intro} {' '.join(detail_sentences)}"
 
     return narr, det
 
@@ -398,7 +406,7 @@ if st.session_state.active_platform == "ScanRDI":
             st.caption(f"Changeover: Suite {c_suite}{c_suffix} ({c_loc}) [Room ID: {c_room}]")
         else:
             st.session_state.chgbsc_id = st.session_state.bsc_id
-            st.info(f"Changeover BSC set to {st.session_state.bsc_id}")
+            # info removed
 
     st.header("3. Findings & EM Data")
     f1, f2 = st.columns(2)
@@ -472,6 +480,7 @@ if st.session_state.active_platform == "ScanRDI":
         st.subheader("EM Growth Details (Editable)")
         st.text_area("Details Content", key="em_details", height=200, label_visibility="collapsed")
     else:
+        # Default No Growth Logic
         st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, and settling plates. Additionally, weekly active air sampling and weekly surface sampling showed no microbial growth."
         st.session_state.em_details = ""
 
@@ -481,7 +490,6 @@ if st.session_state.active_platform == "ScanRDI":
     st.subheader("Sample History")
     st.radio("Were there any prior failures in the last 6 months?", ["No", "Yes"], key="has_prior_failures", horizontal=True)
     if st.session_state.has_prior_failures == "Yes":
-        # FIXED: Ensure incidence_count starts at 1
         if st.session_state.incidence_count < 1: st.session_state.incidence_count = 1
         count = st.number_input("Number of Prior Failures", min_value=1, step=1, key="incidence_count")
         
