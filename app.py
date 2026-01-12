@@ -373,7 +373,7 @@ if st.session_state.active_platform == "ScanRDI":
 
     st.divider()
     
-    # EDITABLE TEXT AREAS (Stacked Below Inputs, matching requested style )
+    # EDITABLE TEXT AREAS (Stacked Below Inputs)
     st.subheader("Narrative Summary (Editable)")
     st.session_state.narrative_summary = st.text_area("Narrative Summary Content", value=narr_txt, height=120, disabled=False, key="narr_editable", label_visibility="collapsed")
 
@@ -395,8 +395,13 @@ if st.session_state.active_platform == "ScanRDI":
     else:
         st.session_state.incidence_count = 0
         st.session_state.oos_refs = ""
-        
-    st.session_state.sample_history_paragraph = st.text_area("History Text Content", value=hist_txt, height=120, disabled=False, key="hist_editable", label_visibility="collapsed")
+    
+    # Conditionally display Sample History Text Area
+    if st.session_state.has_prior_failures == "Yes":
+        st.session_state.sample_history_paragraph = st.text_area("History Text Content", value=hist_txt, height=120, disabled=False, key="hist_editable", label_visibility="collapsed")
+    else:
+        # Keep variable updated in background but hide UI
+        st.session_state.sample_history_paragraph = hist_txt
 
     st.divider()
 
@@ -427,7 +432,12 @@ if st.session_state.active_platform == "ScanRDI":
                 except: saved_order = 1
                 st.session_state[key_order] = st.number_input(f"Other Sample #{i+1} Order", key=f"input_order_{i}", value=max(1, saved_order), step=1)
     
-    st.session_state.cross_contamination_summary = st.text_area("Cross-Contam Text Content", value=cc_txt, height=250, disabled=False, key="cc_editable", label_visibility="collapsed")
+    # Conditionally display Cross-Contam Text Area
+    if st.session_state.other_positives == "Yes":
+        st.session_state.cross_contamination_summary = st.text_area("Cross-Contam Text Content", value=cc_txt, height=250, disabled=False, key="cc_editable", label_visibility="collapsed")
+    else:
+        # Keep variable updated in background but hide UI
+        st.session_state.cross_contamination_summary = cc_txt
 
     save_current_state()
 
