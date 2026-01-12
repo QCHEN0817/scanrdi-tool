@@ -328,4 +328,4 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         out_name = f"OOS-{st.session_state.oos_id} {st.session_state.client_name} ({st.session_state.sample_id}) - {st.session_state.active_platform}.docx"
         doc.save(out_name)
         with open(out_name, "rb") as f:
-            st.
+            st.download_button("📂 Download Document", f, file_name=out_name)
