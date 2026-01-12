@@ -47,11 +47,10 @@ field_keys = [
     "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air_weekly", 
     "id_air_weekly", "obs_room", "etx_room_weekly", "id_room_weekly", "weekly_init", 
     "date_weekly", "equipment_summary", "narrative_summary", "em_details", 
-    "sample_history_para", "incidence_count", "oos_refs"
+    "sample_history", "incidence_count", "oos_refs"
 ]
 
 for k in field_keys:
-    # incidence_count must be an integer to avoid ValueError in number_input
     if k == "incidence_count":
         init_state(k, 0)
     elif "etx" in k or "id" in k:
@@ -223,27 +222,23 @@ if st.session_state.active_platform == "ScanRDI":
     st.header("5. Automated Summaries")
     h1, h2 = st.columns(2)
     with h1:
-        # Safety check for integer conversion to prevent ValueError
-        try: 
-            curr_val = int(st.session_state.incidence_count)
-        except: 
-            curr_val = 0
+        try: curr_val = int(st.session_state.incidence_count)
+        except: curr_val = 0
         st.session_state.incidence_count = st.number_input("Number of Prior Failures", value=curr_val, min_value=0, step=1)
     with h2:
-        st.session_state.oos_refs = st.text_input("Related OOS Numbers", st.session_state.oos_refs)
+        st.session_state.oos_refs = st.text_input("Related OOS IDs (e.g. OOS-25001, OOS-25002)", st.session_state.oos_refs)
 
     if st.button("🪄 Auto-Generate All"):
         # 1. Equipment Summary
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name}, and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {st.session_state.changeover_name}."
         
-        # 2. History Logic
+        # 2. History Logic (Fixed: No auto 'OOS-' prefix)
         if st.session_state.incidence_count == 0:
-            hist_phrase = "has had no prior failures"
+            st.session_state.sample_history = "no prior failures"
         elif st.session_state.incidence_count == 1:
-            hist_phrase = f"has had 1 incidence of a positive result (OOS-{st.session_state.oos_refs})"
+            st.session_state.sample_history = f"1 incident ({st.session_state.oos_refs})"
         else:
-            hist_phrase = f"has had {st.session_state.incidence_count} incidences of positive results (OOS-{st.session_state.oos_refs})"
-        st.session_state.sample_history_para = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” {hist_phrase} using the Scan RDI method during this period."
+            st.session_state.sample_history = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
 
         # 3. Narrative/EM Logic
         growth_sources = []
@@ -276,7 +271,7 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.em_details = "\n\n".join(details_list)
         st.rerun()
 
-    st.session_state.sample_history_para = st.text_area("Sample History Preview", value=st.session_state.sample_history_para, height=100)
+    st.session_state.sample_history = st.text_area("Sample History Fragment (Editable)", value=st.session_state.sample_history, height=70)
     st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=120)
     st.session_state.em_details = st.text_area("EM Growth Details (Editable)", value=st.session_state.em_details, height=150)
 
@@ -287,7 +282,11 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         doc = DocxTemplate(template_name)
         final_data = {k: v for k, v in st.session_state.items()}
         final_data["oos_full"] = f"OOS-{st.session_state.oos_id}"
-        # Set "No Growth" for table display if blank
+        final_data["prepper_name"] = st.session_state.prepper_name
+        final_data["analyst_name"] = st.session_state.analyst_name
+        final_data["changeover_name"] = st.session_state.changeover_name
+        final_data["reader_name"] = st.session_state.reader_name
+
         for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
             if not final_data[key].strip(): final_data[key] = "No Growth"
         try:
