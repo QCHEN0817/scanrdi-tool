@@ -184,7 +184,6 @@ def generate_cross_contam_text():
         return f"{ids_str} were the {count_word} samples tested positive for microbial growth. The analyst confirmed that these samples were not processed concurrently, sequentially, or within the same manifold run. Specifically, {details_str}. The analyst also verified that gloves were thoroughly disinfected between samples. Furthermore, all other samples processed by the analyst that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
 
 def generate_narrative_and_details():
-    # 1. Identify Failures
     failures = []
     if st.session_state.obs_pers.strip():
         failures.append({"cat": "personnel sampling", "obs": st.session_state.obs_pers, "etx": st.session_state.etx_pers, "id": st.session_state.id_pers, "time": "daily"})
@@ -197,7 +196,6 @@ def generate_narrative_and_details():
     if st.session_state.obs_room.strip():
         failures.append({"cat": "weekly surface sampling", "obs": st.session_state.obs_room, "etx": st.session_state.etx_room_weekly, "id": st.session_state.id_room_wk_of, "time": "weekly"})
 
-    # 2. Build "Pass" Narrative
     pass_em_clean = []
     if not st.session_state.obs_pers.strip(): pass_em_clean.append("personal sampling (left touch and right touch)")
     if not st.session_state.obs_surf.strip(): pass_em_clean.append("surface sampling")
@@ -229,23 +227,29 @@ def generate_narrative_and_details():
         elif not pass_em_clean:
              narr += f"However, {wk_str} showed no microbial growth."
 
-    # 3. Build "Fail" Narrative (Combined Paragraph with correct grammar)
     det = ""
     if failures:
-        # Build Intro
-        cat_names = [f["cat"] for f in failures]
-        if len(cat_names) == 1: cat_str = cat_names[0]
-        elif len(cat_names) == 2: cat_str = f"both {cat_names[0]} and {cat_names[1]}"
-        else: cat_str = ", ".join(cat_names[:-1]) + f", and {cat_names[-1]}"
+        daily_fails = [f["cat"] for f in failures if f['time'] == 'daily']
+        weekly_fails = [f["cat"] for f in failures if f['time'] == 'weekly']
         
-        times = set(f["time"] for f in failures)
-        if "daily" in times and "weekly" in times: time_str = "on the date and week of testing"
-        elif "weekly" in times: time_str = "the week of testing"
-        else: time_str = "on the date of testing"
+        intro_parts = []
+        if daily_fails:
+            if len(daily_fails) == 1: d_str = daily_fails[0]
+            elif len(daily_fails) == 2: d_str = f"{daily_fails[0]} and {daily_fails[1]}"
+            else: d_str = ", ".join(daily_fails[:-1]) + f", and {daily_fails[-1]}"
+            intro_parts.append(f"{d_str} on the date")
+            
+        if weekly_fails:
+            if len(weekly_fails) == 1: w_str = weekly_fails[0]
+            elif len(weekly_fails) == 2: w_str = f"{weekly_fails[0]} and {weekly_fails[1]}"
+            else: w_str = ", ".join(weekly_fails[:-1]) + f", and {weekly_fails[-1]}"
+            intro_parts.append(f"{w_str} from week of testing")
+            
+        if len(intro_parts) == 2:
+            fail_intro = f"However, microbial growth was observed during both {intro_parts[0]} and {intro_parts[1]}."
+        else:
+            fail_intro = f"However, microbial growth was observed during {intro_parts[0]}."
         
-        fail_intro = f"However, microbial growth was observed during {cat_str} {time_str}."
-        
-        # Build Details
         detail_parts = []
         for f in failures:
             part = f"{f['obs']} was detected during {f['cat']} under sample ID {f['etx']}, where the organism identified was {f['id']}"
@@ -254,10 +258,8 @@ def generate_narrative_and_details():
         if len(detail_parts) == 1:
             fail_specifics = f"Specifically, {detail_parts[0]}."
         elif len(detail_parts) == 2:
-            # 2 Items: "Specifically, A, and B."
             fail_specifics = f"Specifically, {detail_parts[0]}, and {detail_parts[1]}."
         else:
-            # 3+ Items: "Specifically, A, B, and C."
             joined_prev = ", ".join(detail_parts[:-1])
             fail_specifics = f"Specifically, {joined_prev}, and {detail_parts[-1]}."
             
@@ -281,6 +283,7 @@ for k in field_keys:
     elif k == "has_prior_failures": init_state(k, "No")
     elif k == "em_growth_observed": init_state(k, "No")
     elif k == "diff_changeover_analyst": init_state(k, "No")
+    elif k.startswith("other_order_"): init_state(k, 1)
     else: init_state(k, "")
 
 if "data_loaded" not in st.session_state:
@@ -374,6 +377,7 @@ if st.session_state.active_platform == "ScanRDI":
                 st.session_state.changeover_name = get_full_name(st.session_state.changeover_initial)
             st.text_input("Changeover Full Name", key="changeover_name")
     else:
+        # Auto-sync
         st.session_state.changeover_initial = st.session_state.analyst_initial
         st.session_state.changeover_name = st.session_state.analyst_name
 
@@ -393,7 +397,7 @@ if st.session_state.active_platform == "ScanRDI":
             st.caption(f"Changeover: Suite {c_suite}{c_suffix} ({c_loc}) [Room ID: {c_room}]")
         else:
             st.session_state.chgbsc_id = st.session_state.bsc_id
-            st.info(f"Changeover BSC set to {st.session_state.bsc_id}")
+            # REMOVED st.info HERE as requested
 
     st.header("3. Findings & EM Data")
     f1, f2 = st.columns(2)
@@ -467,6 +471,7 @@ if st.session_state.active_platform == "ScanRDI":
         st.subheader("EM Growth Details (Editable)")
         st.text_area("Details Content", key="em_details", height=200, label_visibility="collapsed")
     else:
+        # Default No Growth Logic
         st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, and settling plates. Additionally, weekly active air sampling and weekly surface sampling showed no microbial growth."
         st.session_state.em_details = ""
 
@@ -476,9 +481,13 @@ if st.session_state.active_platform == "ScanRDI":
     st.subheader("Sample History")
     st.radio("Were there any prior failures in the last 6 months?", ["No", "Yes"], key="has_prior_failures", horizontal=True)
     if st.session_state.has_prior_failures == "Yes":
-        st.number_input("Number of Prior Failures", min_value=1, step=1, key="incidence_count")
+        # FIXED: Ensure incidence_count starts at 1
+        if st.session_state.incidence_count < 1: st.session_state.incidence_count = 1
+        # Use a variable to capture the number input value immediately
+        count = st.number_input("Number of Prior Failures", min_value=1, step=1, key="incidence_count")
         
-        for i in range(st.session_state.incidence_count):
+        # Use the captured variable 'count' for the loop range
+        for i in range(count):
             if f"prior_oos_{i}" not in st.session_state: st.session_state[f"prior_oos_{i}"] = ""
             st.text_input(f"Prior Failure #{i+1} OOS ID", key=f"prior_oos_{i}")
         
@@ -505,6 +514,8 @@ if st.session_state.active_platform == "ScanRDI":
             with sub_c1:
                 st.text_input(f"Other Sample #{i+1} ID", key=f"other_id_{i}")
             with sub_c2:
+                # Ensure default is 1
+                if f"other_order_{i}" not in st.session_state: st.session_state[f"other_order_{i}"] = 1
                 st.number_input(f"Other Sample #{i+1} Order", min_value=1, step=1, key=f"other_order_{i}")
         
         if st.button("🔄 Generate Cross-Contam Text"):
