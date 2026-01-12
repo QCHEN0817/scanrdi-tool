@@ -104,9 +104,9 @@ def get_room_logic(bsc_id):
     room_id = room_map.get(suite, "Unknown")
     return room_id, suite, suffix, location
 
-# --- TEXT GENERATION ENGINE (LIVE) ---
+# --- GENERATE LIVE TEXTS ---
 def generate_live_texts():
-    # 1. Equipment Summary
+    # 1. Equipment
     t_room, t_suite, t_suffix, t_loc = get_room_logic(st.session_state.bsc_id)
     c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
     
@@ -144,7 +144,6 @@ def generate_live_texts():
             if oid:
                 other_list_ids.append(oid)
                 detail_sentences.append(f"{oid} was the {oord_text} sample processed")
-        
         all_ids = other_list_ids + [st.session_state.sample_id]
         if len(all_ids) == 2: ids_str = f"{all_ids[0]} and {all_ids[1]}"
         else: ids_str = ", ".join(all_ids[:-1]) + ", and " + all_ids[-1]
@@ -201,7 +200,7 @@ def generate_live_texts():
 
     return equip_text, hist_text, cc_text, narr_text, em_text
 
-# --- STATE INIT ---
+# --- INIT STATE ---
 def init_state(key, default_value=""):
     if key not in st.session_state: st.session_state[key] = default_value
 
@@ -235,14 +234,10 @@ def parse_email_text(text):
     if lot_match: st.session_state.lot_number = lot_match.group(1).strip()
     date_match = re.search(r"testing\s*on\s*(\d{2}\s*\w{3}\s*\d{4})", text, re.IGNORECASE)
     if date_match:
-        try:
-            d_obj = datetime.strptime(date_match.group(1).strip(), "%d %b %Y")
-            st.session_state.test_date = d_obj.strftime("%d%b%y")
+        try: d_obj = datetime.strptime(date_match.group(1).strip(), "%d %b %Y"); st.session_state.test_date = d_obj.strftime("%d%b%y")
         except: pass
     analyst_match = re.search(r"\(\s*([A-Z]{2,3})\s*\d+[a-z]{2}\s*Sample\)", text)
-    if analyst_match: 
-        st.session_state.analyst_initial = analyst_match.group(1).strip()
-        st.session_state.analyst_name = get_full_name(st.session_state.analyst_initial)
+    if analyst_match: st.session_state.analyst_initial = analyst_match.group(1).strip(); st.session_state.analyst_name = get_full_name(st.session_state.analyst_initial)
     save_current_state()
 
 # --- SIDEBAR ---
@@ -257,14 +252,11 @@ with st.sidebar:
 
 st.title(f"Sterility Investigation & Reporting: {st.session_state.active_platform}")
 
-# --- SMART PARSER BOX ---
+# --- SMART PARSER ---
 st.header("📧 Smart Email Import")
 email_input = st.text_area("Paste the OOS Notification email here to auto-fill fields:", height=150)
 if st.button("🪄 Parse Email & Auto-Fill"):
-    if email_input:
-        parse_email_text(email_input)
-        st.success("Fields updated!")
-        st.rerun()
+    if email_input: parse_email_text(email_input); st.success("Fields updated!"); st.rerun()
 
 # --- SECTION 1 ---
 st.header("1. General Test Details")
@@ -328,11 +320,8 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.shift_number = st.text_input("Shift Number", st.session_state.shift_number)
         shape_opts = ["rod", "cocci", "Other"]
         st.session_state.org_choice = st.selectbox("Org Shape", shape_opts, index=shape_opts.index(st.session_state.org_choice) if st.session_state.org_choice in shape_opts else 0)
-        if st.session_state.org_choice == "Other":
-            st.session_state.manual_org = st.text_input("Enter Manual Org Shape", st.session_state.manual_org)
-        try:
-            date_part = datetime.strptime(st.session_state.test_date, "%d%b%y").strftime("%m%d%y")
-            st.session_state.test_record = f"{date_part}-{st.session_state.scan_id}-{st.session_state.shift_number}"
+        if st.session_state.org_choice == "Other": st.session_state.manual_org = st.text_input("Enter Manual Org Shape", st.session_state.manual_org)
+        try: d_obj = datetime.strptime(st.session_state.test_date, "%d%b%y").strftime("%m%d%y"); st.session_state.test_record = f"{d_obj}-{st.session_state.scan_id}-{st.session_state.shift_number}"
         except: pass
         st.text_input("Record Ref", st.session_state.test_record, disabled=True)
     with f2:
@@ -372,7 +361,6 @@ if st.session_state.active_platform == "ScanRDI":
     # --- GENERATE LIVE TEXTS ---
     equip_txt, hist_txt, cc_txt, narr_txt, em_txt = generate_live_texts()
     
-    # Store calculated texts in session state so they can be passed to the DocxTemplate later
     st.session_state.equipment_summary = equip_txt
     st.session_state.sample_history_paragraph = hist_txt
     st.session_state.cross_contamination_summary = cc_txt
@@ -382,10 +370,10 @@ if st.session_state.active_platform == "ScanRDI":
     # --- SECTION 5: LIVE SIDE-BY-SIDE ---
     st.header("5. Automated Summaries & Analysis")
     
-    # Row 1: History
+    # 1. History
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("Sample History Inputs")
+        st.subheader("Sample History")
         st.session_state.has_prior_failures = st.radio("Were there any prior failures in the last 6 months?", ["No", "Yes"], index=0 if st.session_state.has_prior_failures == "No" else 1, horizontal=True)
         if st.session_state.has_prior_failures == "Yes":
             try: curr_val = int(st.session_state.incidence_count)
@@ -397,30 +385,28 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.incidence_count = 0
             st.session_state.oos_refs = ""
     with c2:
-        st.subheader("History Paragraph (Auto-Generated)")
+        st.subheader("Generated History Text")
         st.text_area("Live Preview (Read Only)", value=hist_txt, height=150, disabled=True)
 
     st.divider()
 
-    # Row 2: Cross Contamination
+    # 2. Cross Contam
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("Cross-Contamination Inputs")
+        st.subheader("Cross-Contamination Analysis")
         st.session_state.other_positives = st.radio("Did other samples test positive on the same day?", ["No", "Yes"], index=0 if st.session_state.other_positives == "No" else 1, horizontal=True)
-        
         if st.session_state.other_positives == "Yes":
             try: count_val = int(st.session_state.total_pos_count_num)
             except: count_val = 2
             safe_count = max(2, count_val)
-            st.session_state.total_pos_count_num = st.number_input("Total # of Positive Samples that day (Including this one)", min_value=2, value=safe_count, step=1)
+            st.session_state.total_pos_count_num = st.number_input("Total # of Positive Samples that day", min_value=2, value=safe_count, step=1)
             
             try: cur_order_val = int(st.session_state.current_pos_order)
             except: cur_order_val = 1
-            st.session_state.current_pos_order = st.number_input(f"Processing Order of THIS Sample ({st.session_state.sample_id})", value=max(1, cur_order_val), step=1)
+            st.session_state.current_pos_order = st.number_input(f"Order of THIS Sample ({st.session_state.sample_id})", value=max(1, cur_order_val), step=1)
             
             num_others = st.session_state.total_pos_count_num - 1
-            st.caption(f"Please enter details for the **{num_others}** other positive sample(s):")
-            
+            st.caption(f"Details for {num_others} other positive(s):")
             for i in range(num_others):
                 sub_c1, sub_c2 = st.columns(2)
                 with sub_c1:
@@ -433,10 +419,42 @@ if st.session_state.active_platform == "ScanRDI":
                     except: saved_order = 1
                     st.session_state[key_order] = st.number_input(f"Other Sample #{i+1} Order", key=f"input_order_{i}", value=max(1, saved_order), step=1)
     with c2:
-        st.subheader("Cross-Contamination Paragraph (Auto-Generated)")
+        st.subheader("Generated Cross-Contam Text")
         st.text_area("Live Preview (Read Only)", value=cc_txt, height=350, disabled=True)
 
-    # Save state on every rerun (live update)
+    st.divider()
+
+    # 3. Narrative & EM (Restored)
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("EM Findings Summary")
+        st.caption("Inputs from Section 4 (EM Observations)")
+        
+        # Display a quick read-only summary of findings so user can see why text says what it says
+        em_findings = []
+        if st.session_state.obs_pers.strip(): em_findings.append(f"🔴 Personnel: {st.session_state.obs_pers}")
+        else: em_findings.append("✅ Personnel: No Growth")
+        
+        if st.session_state.obs_surf.strip(): em_findings.append(f"🔴 Surface: {st.session_state.obs_surf}")
+        else: em_findings.append("✅ Surface: No Growth")
+        
+        if st.session_state.obs_sett.strip(): em_findings.append(f"🔴 Settling: {st.session_state.obs_sett}")
+        else: em_findings.append("✅ Settling: No Growth")
+        
+        if st.session_state.obs_air.strip(): em_findings.append(f"🔴 Weekly Air: {st.session_state.obs_air}")
+        else: em_findings.append("✅ Weekly Air: No Growth")
+        
+        if st.session_state.obs_room.strip(): em_findings.append(f"🔴 Weekly Room: {st.session_state.obs_room}")
+        else: em_findings.append("✅ Weekly Room: No Growth")
+        
+        for f in em_findings:
+            st.text(f)
+
+    with c2:
+        st.subheader("Generated Narrative & EM Details")
+        st.text_area("Narrative Summary (Live)", value=narr_txt, height=120, disabled=True)
+        st.text_area("EM Details (Live)", value=em_txt, height=200, disabled=True)
+
     save_current_state()
 
 # --- FINAL GENERATION ---
