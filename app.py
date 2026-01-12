@@ -15,7 +15,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Helper function for reverse lookup (Initials -> Full Name)
+# --- HELPER FUNCTIONS ---
 def get_full_name(initials):
     if not initials: return ""
     lookup = {
@@ -28,6 +28,20 @@ def get_full_name(initials):
         "GL": "Guanchen Li", "QYC": "Qiyue Chen"
     }
     return lookup.get(initials.upper().strip(), "")
+
+def get_room_logic(bsc_id):
+    try:
+        num = int(bsc_id)
+        suffix = "B" if num % 2 == 0 else "A"
+        location = "innermost ISO 7 room" if suffix == "B" else "middle ISO 7 buffer room"
+    except: suffix, location = "B", "innermost ISO 7 room"
+    
+    if bsc_id in ["1310", "1309"]: room, suite = "117", "117"
+    elif bsc_id in ["1311", "1312"]: room, suite = "116", "116"
+    elif bsc_id in ["1314", "1313"]: room, suite = "115", "115"
+    elif bsc_id in ["1316", "1798"]: room, suite = "114", "114"
+    else: room, suite = "Unknown", "Unknown"
+    return room, suite, suffix, location
 
 # --- SESSION STATE INITIALIZATION ---
 def init_state(key, default_value=""):
@@ -150,19 +164,6 @@ if st.session_state.active_platform == "ScanRDI":
         rea_full = get_full_name(st.session_state.reader_initial)
         st.session_state.reader_name = st.text_input("Reader Full Name", value=st.session_state.reader_name if st.session_state.reader_name else rea_full)
 
-    def get_room_logic(bsc_id):
-        try:
-            num = int(bsc_id)
-            suffix = "B" if num % 2 == 0 else "A"
-            location = "innermost ISO 7 room" if suffix == "B" else "middle ISO 7 buffer room"
-        except: suffix, location = "B", "innermost ISO 7 room"
-        if bsc_id in ["1310", "1309"]: room, suite = "117", "117"
-        elif bsc_id in ["1311", "1312"]: room, suite = "116", "116"
-        elif bsc_id in ["1314", "1313"]: room, suite = "115", "115"
-        elif bsc_id in ["1316", "1798"]: room, suite = "114", "114"
-        else: room, suite = "Unknown", "Unknown"
-        return room, suite, suffix, location
-
     e1, e2 = st.columns(2)
     bsc_list = ["1310", "1309", "1311", "1312", "1314", "1313", "1316", "1798", "Other"]
     with e1:
@@ -240,7 +241,7 @@ if st.session_state.active_platform == "ScanRDI":
         # 1. Equipment Summary
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name}, and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {st.session_state.changeover_name}."
         
-        # 2. History Logic (Full Sentence Generation)
+        # 2. History Logic (Full Paragraph)
         if st.session_state.incidence_count == 0:
             hist_phrase = "no prior failures"
         elif st.session_state.incidence_count == 1:
@@ -248,7 +249,6 @@ if st.session_state.active_platform == "ScanRDI":
         else:
             hist_phrase = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
         
-        # We now generate the ENTIRE paragraph
         st.session_state.sample_history_paragraph = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” has had {hist_phrase} using the Scan RDI method during this period."
 
         # 3. Narrative/EM Logic
@@ -294,10 +294,11 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         doc = DocxTemplate(template_name)
         final_data = {k: v for k, v in st.session_state.items()}
         final_data["oos_full"] = f"OOS-{st.session_state.oos_id}"
-        final_data["prepper_name"] = st.session_state.prepper_name
-        final_data["analyst_name"] = st.session_state.analyst_name
-        final_data["changeover_name"] = st.session_state.changeover_name
-        final_data["reader_name"] = st.session_state.reader_name
+        
+        # --- FIXED: Explicitly map cr_suit for the template ---
+        if st.session_state.active_platform == "ScanRDI":
+            _, suite_num, _, _ = get_room_logic(st.session_state.bsc_id)
+            final_data["cr_suit"] = suite_num
 
         for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
             if not final_data[key].strip(): final_data[key] = "No Growth"
