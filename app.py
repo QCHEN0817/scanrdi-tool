@@ -42,13 +42,13 @@ field_keys = [
     "changeover_initial", "changeover_name",
     "reader_initial", "reader_name",
     "bsc_id", "chgbsc_id", "scan_id", 
-    "shift_number", # Shift Number
+    "shift_number",
     "org_choice", "manual_org", "test_record", "control_pos", "control_lot", 
     "control_exp", "obs_pers", "etx_pers", "id_pers", "obs_surf", "etx_surf", 
     "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air_weekly", 
     "id_air_weekly", "obs_room", "etx_room_weekly", "id_room_weekly", "weekly_init", 
     "date_weekly", "equipment_summary", "narrative_summary", "em_details", 
-    "sample_history", "sample_history_full_preview", "incidence_count", "oos_refs"
+    "sample_history_paragraph", "incidence_count", "oos_refs"
 ]
 
 for k in field_keys:
@@ -180,7 +180,6 @@ if st.session_state.active_platform == "ScanRDI":
         scan_ids = ["1230", "2017", "1040", "1877", "2225", "2132"]
         st.session_state.scan_id = st.selectbox("ScanRDI ID", scan_ids, index=scan_ids.index(st.session_state.scan_id) if st.session_state.scan_id in scan_ids else 0)
         
-        # Shift Number Input
         st.session_state.shift_number = st.text_input("Shift Number", st.session_state.shift_number)
 
         shape_opts = ["rod", "cocci", "Other"]
@@ -188,7 +187,6 @@ if st.session_state.active_platform == "ScanRDI":
         if st.session_state.org_choice == "Other":
             st.session_state.manual_org = st.text_input("Enter Manual Org Shape", st.session_state.manual_org)
         
-        # Record Ref Logic: Date-ScanID-Shift
         try:
             date_part = datetime.strptime(st.session_state.test_date, "%d%b%y").strftime("%m%d%y")
             st.session_state.test_record = f"{date_part}-{st.session_state.scan_id}-{st.session_state.shift_number}"
@@ -242,15 +240,16 @@ if st.session_state.active_platform == "ScanRDI":
         # 1. Equipment Summary
         st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name}, and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {st.session_state.changeover_name}."
         
-        # 2. History Logic
+        # 2. History Logic (Full Sentence Generation)
         if st.session_state.incidence_count == 0:
-            st.session_state.sample_history = "no prior failures"
+            hist_phrase = "no prior failures"
         elif st.session_state.incidence_count == 1:
-            st.session_state.sample_history = f"1 incident ({st.session_state.oos_refs})"
+            hist_phrase = f"1 incident ({st.session_state.oos_refs})"
         else:
-            st.session_state.sample_history = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
+            hist_phrase = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
         
-        st.session_state.sample_history_full_preview = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” has had {st.session_state.sample_history} using the Scan RDI method during this period."
+        # We now generate the ENTIRE paragraph
+        st.session_state.sample_history_paragraph = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” has had {hist_phrase} using the Scan RDI method during this period."
 
         # 3. Narrative/EM Logic
         growth_sources = []
@@ -284,10 +283,7 @@ if st.session_state.active_platform == "ScanRDI":
         st.rerun()
 
     st.session_state.equipment_summary = st.text_area("Equipment Summary (Editable)", value=st.session_state.equipment_summary, height=120)
-    
-    st.info(f"**Sample History Preview (Full Context):** {st.session_state.sample_history_full_preview}")
-    st.session_state.sample_history = st.text_area("Sample History Fragment (Editable for Docx)", value=st.session_state.sample_history, height=70)
-    
+    st.session_state.sample_history_paragraph = st.text_area("Sample History (Full Paragraph Editable)", value=st.session_state.sample_history_paragraph, height=100)
     st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=120)
     st.session_state.em_details = st.text_area("EM Growth Details (Editable)", value=st.session_state.em_details, height=150)
 
@@ -298,7 +294,11 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         doc = DocxTemplate(template_name)
         final_data = {k: v for k, v in st.session_state.items()}
         final_data["oos_full"] = f"OOS-{st.session_state.oos_id}"
-        
+        final_data["prepper_name"] = st.session_state.prepper_name
+        final_data["analyst_name"] = st.session_state.analyst_name
+        final_data["changeover_name"] = st.session_state.changeover_name
+        final_data["reader_name"] = st.session_state.reader_name
+
         for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
             if not final_data[key].strip(): final_data[key] = "No Growth"
         try:
