@@ -151,8 +151,10 @@ with st.sidebar:
     if st.button("Celsis"): st.session_state.active_platform = "Celsis"
     if st.button("USP 71"): st.session_state.active_platform = "USP 71"
     st.divider()
+    
     if st.button("💾 Save Current Inputs"):
         save_current_state()
+        
     st.success(f"Active: {st.session_state.active_platform}")
 
 st.title(f"Sterility Investigation & Reporting: {st.session_state.active_platform}")
@@ -275,12 +277,12 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.oos_refs = st.text_input("Related OOS IDs (e.g. OOS-25001, OOS-25002)", st.session_state.oos_refs)
 
     if st.button("🪄 Auto-Generate All"):
-        # --- 1. EQUIPMENT SUMMARY LOGIC ---
+        # --- 1. SMART EQUIPMENT SUMMARY LOGIC ---
         t_room, t_suite, t_suffix, t_loc = get_room_logic(st.session_state.bsc_id)
         c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
         
+        # SCENARIO 1: SAME BSC (Implies Same Suite)
         if st.session_state.bsc_id == st.session_state.chgbsc_id:
-            # Single BSC Paragraph Structure
             part1 = (
                 f"The cleanroom used for testing and changeover procedures (Suite {t_suite}) comprises three interconnected sections: "
                 f"the innermost ISO 7 cleanroom ({t_suite}B), which connects to the middle ISO 7 buffer room ({t_suite}A), "
@@ -295,27 +297,48 @@ if st.session_state.active_platform == "ScanRDI":
                 f"(Suite {t_suite}{t_suffix}) by {st.session_state.analyst_name} on {st.session_state.test_date}."
             )
             st.session_state.equipment_summary = f"{part1}\n\n{part2}"
-        
-        else:
-            # Dual BSC Paragraph Structure
+
+        # SCENARIO 2: DIFFERENT BSCs, BUT SAME SUITE
+        elif t_suite == c_suite:
             part1 = (
-                f"The cleanroom used for testing (E00{t_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), "
-                f"which opens into the middle ISO 7 buffer room ({t_suite}A), and then into the outermost ISO 8 anteroom ({t_suite}). "
-                f"A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}.\n\n"
-                f"The cleanroom used for changeover (E00{c_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({c_suite}B), "
-                f"which opens into the middle ISO 7 buffer room ({c_suite}A), and then into the outermost ISO 8 anteroom ({c_suite}). "
-                f"A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {c_suite}B through {c_suite}A and into {c_suite}."
+                f"The cleanroom used for testing and changeover procedures (Suite {t_suite}) comprises three interconnected sections: "
+                f"the innermost ISO 7 cleanroom ({t_suite}B), which connects to the middle ISO 7 buffer room ({t_suite}A), "
+                f"and then to the outermost ISO 8 anteroom ({t_suite}). A positive air pressure system is maintained throughout the suite "
+                f"to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}."
             )
             part2 = (
                 f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), and "
                 f"ISO 5 BSC E00{st.session_state.chgbsc_id}, located in the {c_loc}, (Suite {c_suite}{c_suffix}), were thoroughly cleaned and disinfected prior to their respective procedures "
                 f"in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). Furthermore, the BSCs used throughout testing, "
                 f"E00{st.session_state.bsc_id} for sample processing and E00{st.session_state.chgbsc_id} for the changeover step, were certified and approved by both the Engineering and Quality Assurance teams. "
-                f"Sample processing was conducted within the ISO 5 BSC in the {t_loc} (Suite {t_suite}{t_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name} "
-                f"and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) "
+                f"Sample processing was conducted within the ISO 5 BSC in the innermost section of the cleanroom (Suite {t_suite}{t_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name} "
+                f"and the changeover step was conducted within the ISO 5 BSC in the middle section of the cleanroom (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) "
                 f"by {st.session_state.changeover_name} on {st.session_state.test_date}."
             )
             st.session_state.equipment_summary = f"{part1}\n\n{part2}"
+
+        # SCENARIO 3: DIFFERENT BSCs AND DIFFERENT SUITES
+        else:
+            part1 = (
+                f"The cleanroom used for testing (E00{t_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), "
+                f"which opens into the middle ISO 7 buffer room ({t_suite}A), and then into the outermost ISO 8 anteroom ({t_suite}). "
+                f"A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}."
+            )
+            part2 = (
+                f"The cleanroom used for changeover (E00{c_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({c_suite}B), "
+                f"which opens into the middle ISO 7 buffer room ({c_suite}A), and then into the outermost ISO 8 anteroom ({c_suite}). "
+                f"A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {c_suite}B through {c_suite}A and into {c_suite}."
+            )
+            part3 = (
+                f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), and "
+                f"ISO 5 BSC E00{st.session_state.chgbsc_id}, located in the {c_loc}, (Suite {c_suite}{c_suffix}), were thoroughly cleaned and disinfected prior to their respective procedures "
+                f"in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). Furthermore, the BSCs used throughout testing, "
+                f"E00{st.session_state.bsc_id} for sample processing and E00{st.session_state.chgbsc_id} for the changeover step, were certified and approved by both the Engineering and Quality Assurance teams. "
+                f"Sample processing was conducted within the ISO 5 BSC in the innermost section of the cleanroom (Suite {t_suite}{t_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name} "
+                f"and the changeover step was conducted within the ISO 5 BSC in the middle section of the cleanroom (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) "
+                f"by {st.session_state.changeover_name} on {st.session_state.test_date}."
+            )
+            st.session_state.equipment_summary = f"{part1}\n\n{part2}\n\n{part3}"
 
         # 2. History Logic
         if st.session_state.incidence_count == 0:
