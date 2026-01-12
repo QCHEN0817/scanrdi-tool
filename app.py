@@ -21,7 +21,6 @@ st.markdown("""
 # --- FILE PERSISTENCE (MEMORY) ---
 STATE_FILE = "investigation_state.json"
 
-# All keys that we want to save/load and use in the report
 field_keys = [
     "oos_id", "client_name", "sample_id", "test_date", "sample_name", "lot_number", 
     "dosage_form", "monthly_cleaning_date", 
@@ -42,9 +41,11 @@ field_keys = [
     "diff_changeover_bsc", "has_prior_failures",
     "em_growth_observed", "diff_changeover_analyst"
 ]
+# Dynamic keys for Arrays (Other Samples & Prior OOS)
 for i in range(10):
     field_keys.append(f"other_id_{i}")
     field_keys.append(f"other_order_{i}")
+    field_keys.append(f"prior_oos_{i}")
 
 def load_saved_state():
     if os.path.exists(STATE_FILE):
@@ -111,6 +112,126 @@ def get_room_logic(bsc_id):
     room_map = {"117": "1739", "116": "1738", "115": "1737", "114": "1736"}
     room_id = room_map.get(suite, "Unknown")
     return room_id, suite, suffix, location
+
+# --- GENERATE LIVE TEXTS ---
+def generate_live_texts():
+    # 1. Equipment Summary
+    t_room, t_suite, t_suffix, t_loc = get_room_logic(st.session_state.bsc_id)
+    c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
+    
+    if st.session_state.bsc_id == st.session_state.chgbsc_id:
+        part1 = f"The cleanroom used for testing and changeover procedures (Suite {t_suite}) comprises three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), which connects to the middle ISO 7 buffer room ({t_suite}A), and then to the outermost ISO 8 anteroom ({t_suite}). A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}."
+        part2 = f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), was used for both testing and changeover steps. It was thoroughly cleaned and disinfected prior to each procedure in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). Additionally, BSC E00{st.session_state.bsc_id} was certified and approved by both the Engineering and Quality Assurance teams. Sample processing and changeover were conducted in the ISO 5 BSC E00{st.session_state.bsc_id} in the {t_loc}, (Suite {t_suite}{t_suffix}) by {st.session_state.analyst_name} on {st.session_state.test_date}."
+        equip_text = f"{part1}\n\n{part2}"
+    elif t_suite == c_suite:
+        part1 = f"The cleanroom used for testing and changeover procedures (Suite {t_suite}) comprises three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), which connects to the middle ISO 7 buffer room ({t_suite}A), and then to the outermost ISO 8 anteroom ({t_suite}). A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}."
+        part2 = f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), and ISO 5 BSC E00{st.session_state.chgbsc_id}, located in the {c_loc}, (Suite {c_suite}{c_suffix}), were thoroughly cleaned and disinfected prior to their respective procedures in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). Furthermore, the BSCs used throughout testing, E00{st.session_state.bsc_id} for sample processing and E00{st.session_state.chgbsc_id} for the changeover step, were certified and approved by both the Engineering and Quality Assurance teams. Sample processing was conducted within the ISO 5 BSC in the innermost section of the cleanroom (Suite {t_suite}{t_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name} and the changeover step was conducted within the ISO 5 BSC in the middle section of the cleanroom (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {st.session_state.changeover_name} on {st.session_state.test_date}."
+        equip_text = f"{part1}\n\n{part2}"
+    else:
+        part1 = f"The cleanroom used for testing (E00{t_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), which opens into the middle ISO 7 buffer room ({t_suite}A), and then into the outermost ISO 8 anteroom ({t_suite}). A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}."
+        part2 = f"The cleanroom used for changeover (E00{c_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({c_suite}B), which opens into the middle ISO 7 buffer room ({c_suite}A), and then into the outermost ISO 8 anteroom ({c_suite}). A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {c_suite}B through {c_suite}A and into {c_suite}."
+        part3 = f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), and ISO 5 BSC E00{st.session_state.chgbsc_id}, located in the {c_loc}, (Suite {c_suite}{c_suffix}), were thoroughly cleaned and disinfected prior to their respective procedures in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). Furthermore, the BSCs used throughout testing, E00{st.session_state.bsc_id} for sample processing and E00{st.session_state.chgbsc_id} for the changeover step, were certified and approved by both the Engineering and Quality Assurance teams. Sample processing was conducted within the ISO 5 BSC in the innermost section of the cleanroom (Suite {t_suite}{t_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name} and the changeover step was conducted within the ISO 5 BSC in the middle section of the cleanroom (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {st.session_state.changeover_name} on {st.session_state.test_date}."
+        equip_text = f"{part1}\n\n{part2}\n\n{part3}"
+
+    # 2. History
+    if st.session_state.incidence_count == 0: 
+        hist_phrase = "no prior failures"
+    else:
+        # Collect dynamic Prior IDs
+        prior_ids = []
+        for i in range(st.session_state.incidence_count):
+            pid = st.session_state.get(f"prior_oos_{i}", "")
+            if pid: prior_ids.append(pid)
+        refs_str = ", ".join(prior_ids) if prior_ids else "..."
+        
+        if st.session_state.incidence_count == 1: 
+            hist_phrase = f"1 incident ({refs_str})"
+        else: 
+            hist_phrase = f"{st.session_state.incidence_count} incidents ({refs_str})"
+            
+    hist_text = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” has had {hist_phrase} using the Scan RDI method during this period."
+
+    # 3. Cross Contamination
+    if st.session_state.other_positives == "No":
+        cc_text = "All other samples processed by the analyst and other analysts that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
+    else:
+        num_others = st.session_state.total_pos_count_num - 1
+        other_list_ids = []
+        detail_sentences = []
+        for i in range(num_others):
+            oid = st.session_state.get(f"other_id_{i}", "")
+            oord_num = st.session_state.get(f"other_order_{i}", 1)
+            oord_text = ordinal(oord_num)
+            if oid:
+                other_list_ids.append(oid)
+                detail_sentences.append(f"{oid} was the {oord_text} sample processed")
+        
+        all_ids = other_list_ids + [st.session_state.sample_id]
+        if len(all_ids) == 2: ids_str = f"{all_ids[0]} and {all_ids[1]}"
+        else: ids_str = ", ".join(all_ids[:-1]) + ", and " + all_ids[-1]
+        
+        count_word = num_to_words(st.session_state.total_pos_count_num)
+        cur_ord_text = ordinal(st.session_state.current_pos_order)
+        current_detail = f"while {st.session_state.sample_id} was the {cur_ord_text}"
+        
+        if len(detail_sentences) == 1: details_str = f"{detail_sentences[0]}, {current_detail}"
+        else: details_str = ", ".join(detail_sentences) + f", {current_detail}"
+
+        cc_text = f"{ids_str} were the {count_word} samples tested positive for microbial growth. The analyst confirmed that these samples were not processed concurrently, sequentially, or within the same manifold run. Specifically, {details_str}. The analyst also verified that gloves were thoroughly disinfected between samples. Furthermore, all other samples processed by the analyst that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
+
+    # 4. Narrative & EM
+    if st.session_state.em_growth_observed == "No":
+        em_clean = ["personal sampling (left touch and right touch)", "surface sampling", "settling plates"]
+        wk_clean = ["weekly active air sampling", "weekly surface sampling"]
+        growth_source_list = []
+    else:
+        em_clean = []
+        if not st.session_state.obs_pers.strip(): em_clean.append("personal sampling (left touch and right touch)")
+        if not st.session_state.obs_surf.strip(): em_clean.append("surface sampling")
+        if not st.session_state.obs_sett.strip(): em_clean.append("settling plates")
+        wk_clean = []
+        if not st.session_state.obs_air.strip(): wk_clean.append("weekly active air sampling")
+        if not st.session_state.obs_room.strip(): wk_clean.append("weekly surface sampling")
+        
+        growth_source_list = []
+        sources_config = [
+            ("personnel sampling", st.session_state.obs_pers, st.session_state.etx_pers, st.session_state.id_pers, "on the date of testing"),
+            ("surface sampling", st.session_state.obs_surf, st.session_state.etx_surf, st.session_state.id_surf, "on the date of testing"),
+            ("settling plates", st.session_state.obs_sett, st.session_state.etx_sett, st.session_state.id_sett, "on the date of testing"),
+            ("weekly active air sampling", st.session_state.obs_air, st.session_state.etx_air_weekly, st.session_state.id_air_weekly, "the week of testing"),
+            ("surface sampling of cleanroom during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room_weekly, st.session_state.id_room_wk_of, "the week of testing")
+        ]
+        for cat, obs, etx, oid, tcontext in sources_config:
+            if obs.strip():
+                growth_source_list.append((cat, obs, etx, oid, tcontext))
+
+    narr_text = "Upon analyzing the environmental monitoring results, "
+    if em_clean:
+        if len(em_clean) == 1: clean_str = em_clean[0]
+        elif len(em_clean) == 2: clean_str = f"{em_clean[0]} and {em_clean[1]}"
+        else: clean_str = f"{em_clean[0]}, {em_clean[1]}, and {em_clean[2]}"
+        narr_text += f"no microbial growth was observed in {clean_str}. "
+    else: narr_text += "microbial growth was observed during the testing period. "
+
+    if wk_clean:
+        if len(wk_clean) == 1: wk_str = wk_clean[0]
+        elif len(wk_clean) == 2: wk_str = f"{wk_clean[0]} and {wk_clean[1]}"
+        else: wk_str = ", ".join(wk_clean[:-1]) + ", and " + wk_clean[-1]
+        narr_text += f"Additionally, {wk_str} showed no microbial growth."
+
+    if not growth_source_list:
+        em_text = ""
+    else:
+        details_str_list = []
+        for cat, obs, etx, org_id, time_context in growth_source_list:
+            is_sing = ("1" in obs and "CFU" in obs.upper() and "11" not in obs and "21" not in obs)
+            growth_term, plate_term = ("growth was", "plate was") if is_sing else ("growths were", "plates were")
+            id_label = "sample IDs" if ("," in etx or "AND" in etx.upper()) else "sample ID"
+            org_verb = "organisms identified included" if ("," in org_id or "AND" in org_id.upper()) else "organism identified was"
+            details_str_list.append(f"However, microbial {growth_term} observed in {cat} {time_context}. Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} {etx}. The {org_verb} {org_id}.")
+        em_text = "\n\n".join(details_str_list)
+
+    return equip_text, hist_text, cc_text, narr_text, em_text
 
 # --- INIT STATE ---
 def init_state(key, default_value=""):
@@ -196,28 +317,31 @@ if st.session_state.active_platform == "ScanRDI":
     p1, p2, p3 = st.columns(3)
     with p1:
         st.text_input("Prepper Initials", key="prepper_initial")
-        pre_full = get_full_name(st.session_state.prepper_initial)
-        st.text_input("Prepper Full Name", key="prepper_name", value=st.session_state.prepper_name if st.session_state.prepper_name else pre_full)
+        if st.session_state.prepper_initial and not st.session_state.prepper_name:
+            st.session_state.prepper_name = get_full_name(st.session_state.prepper_initial)
+        st.text_input("Prepper Full Name", key="prepper_name")
     with p2:
         st.text_input("Processor Initials", key="analyst_initial")
-        ana_full = get_full_name(st.session_state.analyst_initial)
-        st.text_input("Processor Full Name", key="analyst_name", value=st.session_state.analyst_name if st.session_state.analyst_name else ana_full)
+        if st.session_state.analyst_initial and not st.session_state.analyst_name:
+            st.session_state.analyst_name = get_full_name(st.session_state.analyst_initial)
+        st.text_input("Processor Full Name", key="analyst_name")
     with p3:
         st.text_input("Reader Initials", key="reader_initial")
-        rea_full = get_full_name(st.session_state.reader_initial)
-        st.text_input("Reader Full Name", key="reader_name", value=st.session_state.reader_name if st.session_state.reader_name else rea_full)
+        if st.session_state.reader_initial and not st.session_state.reader_name:
+            st.session_state.reader_name = get_full_name(st.session_state.reader_initial)
+        st.text_input("Reader Full Name", key="reader_name")
 
-    st.radio("Was the Changeover performed by a different analyst?", ["No", "Yes"], key="diff_changeover_analyst", horizontal=True)
+    st.session_state.diff_changeover_analyst = st.radio("Was the Changeover performed by a different analyst?", ["No", "Yes"], index=0 if st.session_state.diff_changeover_analyst == "No" else 1, horizontal=True)
     
     if st.session_state.diff_changeover_analyst == "Yes":
         c1, c2 = st.columns(2)
         with c1:
             st.text_input("Changeover Initials", key="changeover_initial")
         with c2:
-            chg_full = get_full_name(st.session_state.changeover_initial)
-            st.text_input("Changeover Full Name", key="changeover_name", value=st.session_state.changeover_name if st.session_state.changeover_name else chg_full)
+            if st.session_state.changeover_initial and not st.session_state.changeover_name:
+                st.session_state.changeover_name = get_full_name(st.session_state.changeover_initial)
+            st.text_input("Changeover Full Name", key="changeover_name")
     else:
-        # Auto-sync
         st.session_state.changeover_initial = st.session_state.analyst_initial
         st.session_state.changeover_name = st.session_state.analyst_name
 
@@ -362,11 +486,26 @@ if st.session_state.active_platform == "ScanRDI":
     st.radio("Were there any prior failures in the last 6 months?", ["No", "Yes"], key="has_prior_failures", horizontal=True)
     if st.session_state.has_prior_failures == "Yes":
         st.number_input("Number of Prior Failures", min_value=1, step=1, key="incidence_count")
-        st.text_input("Related OOS IDs (e.g. OOS-25001, OOS-25002)", key="oos_refs")
+        
+        # DYNAMIC OOS FIELDS (Matching Cross-Contam Style)
+        for i in range(st.session_state.incidence_count):
+            if f"prior_oos_{i}" not in st.session_state: st.session_state[f"prior_oos_{i}"] = ""
+            st.text_input(f"Prior Failure #{i+1} OOS ID", key=f"prior_oos_{i}")
         
         if st.button("🔄 Generate History Text"):
-            if st.session_state.incidence_count == 1: phrase = f"1 incident ({st.session_state.oos_refs})"
-            else: phrase = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
+            # Gather dynamic IDs
+            prior_ids = []
+            for i in range(st.session_state.incidence_count):
+                pid = st.session_state.get(f"prior_oos_{i}", "").strip()
+                if pid: prior_ids.append(pid)
+            
+            refs_str = ", ".join(prior_ids)
+            
+            if st.session_state.incidence_count == 1: 
+                phrase = f"1 incident ({refs_str})"
+            else: 
+                phrase = f"{st.session_state.incidence_count} incidents ({refs_str})"
+                
             st.session_state.sample_history_paragraph = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” has had {phrase} using the Scan RDI method during this period."
             st.rerun()
             
@@ -423,22 +562,7 @@ if st.session_state.active_platform == "ScanRDI":
 st.divider()
 if st.button("🚀 GENERATE FINAL REPORT"):
     # Generate Equipment Summary (Hidden)
-    t_room, t_suite, t_suffix, t_loc = get_room_logic(st.session_state.bsc_id)
-    c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
-    
-    if st.session_state.bsc_id == st.session_state.chgbsc_id:
-        part1 = f"The cleanroom used for testing and changeover procedures (Suite {t_suite}) comprises three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), which connects to the middle ISO 7 buffer room ({t_suite}A), and then to the outermost ISO 8 anteroom ({t_suite}). A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}."
-        part2 = f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), was used for both testing and changeover steps. It was thoroughly cleaned and disinfected prior to each procedure in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). Additionally, BSC E00{st.session_state.bsc_id} was certified and approved by both the Engineering and Quality Assurance teams. Sample processing and changeover were conducted in the ISO 5 BSC E00{st.session_state.bsc_id} in the {t_loc}, (Suite {t_suite}{t_suffix}) by {st.session_state.analyst_name} on {st.session_state.test_date}."
-        st.session_state.equipment_summary = f"{part1}\n\n{part2}"
-    elif t_suite == c_suite:
-        part1 = f"The cleanroom used for testing and changeover procedures (Suite {t_suite}) comprises three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), which connects to the middle ISO 7 buffer room ({t_suite}A), and then to the outermost ISO 8 anteroom ({t_suite}). A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}."
-        part2 = f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), and ISO 5 BSC E00{st.session_state.chgbsc_id}, located in the {c_loc}, (Suite {c_suite}{c_suffix}), were thoroughly cleaned and disinfected prior to their respective procedures in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). Furthermore, the BSCs used throughout testing, E00{st.session_state.bsc_id} for sample processing and E00{st.session_state.chgbsc_id} for the changeover step, were certified and approved by both the Engineering and Quality Assurance teams. Sample processing was conducted within the ISO 5 BSC in the innermost section of the cleanroom (Suite {t_suite}{t_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name} and the changeover step was conducted within the ISO 5 BSC in the middle section of the cleanroom (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {st.session_state.changeover_name} on {st.session_state.test_date}."
-        st.session_state.equipment_summary = f"{part1}\n\n{part2}"
-    else:
-        part1 = f"The cleanroom used for testing (E00{t_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), which opens into the middle ISO 7 buffer room ({t_suite}A), and then into the outermost ISO 8 anteroom ({t_suite}). A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}."
-        part2 = f"The cleanroom used for changeover (E00{c_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({c_suite}B), which opens into the middle ISO 7 buffer room ({c_suite}A), and then into the outermost ISO 8 anteroom ({c_suite}). A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {c_suite}B through {c_suite}A and into {c_suite}."
-        part3 = f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), and ISO 5 BSC E00{st.session_state.chgbsc_id}, located in the {c_loc}, (Suite {c_suite}{c_suffix}), were thoroughly cleaned and disinfected prior to their respective procedures in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). Furthermore, the BSCs used throughout testing, E00{st.session_state.bsc_id} for sample processing and E00{st.session_state.chgbsc_id} for the changeover step, were certified and approved by both the Engineering and Quality Assurance teams. Sample processing was conducted within the ISO 5 BSC in the innermost section of the cleanroom (Suite {t_suite}{t_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name} and the changeover step was conducted within the ISO 5 BSC in the middle section of the cleanroom (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {st.session_state.changeover_name} on {st.session_state.test_date}."
-        st.session_state.equipment_summary = f"{part1}\n\n{part2}\n\n{part3}"
+    st.session_state.equipment_summary = generate_live_texts()[0]
     
     # Merge Narrative if EM details exist
     final_narrative = st.session_state.narrative_summary
