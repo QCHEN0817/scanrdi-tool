@@ -235,7 +235,7 @@ for k in field_keys:
     elif k == "diff_changeover_bsc": init_state(k, "No")
     elif k == "has_prior_failures": init_state(k, "No")
     elif k == "em_growth_observed": init_state(k, "No")
-    elif k == "diff_changeover_analyst": init_state(k, "No") # Init new key
+    elif k == "diff_changeover_analyst": init_state(k, "No")
     else: init_state(k, "")
 
 if "data_loaded" not in st.session_state:
@@ -299,7 +299,7 @@ with col3:
 
 # --- SECTION 2 ---
 if st.session_state.active_platform == "ScanRDI":
-    st.header("2. Personnel") # Renamed from Personnel & Changeover
+    st.header("2. Personnel")
     p1, p2, p3 = st.columns(3)
     with p1:
         st.session_state.prepper_initial = st.text_input("Prepper Initials", st.session_state.prepper_initial).upper()
@@ -314,7 +314,6 @@ if st.session_state.active_platform == "ScanRDI":
         rea_full = get_full_name(st.session_state.reader_initial)
         st.session_state.reader_name = st.text_input("Reader Full Name", value=st.session_state.reader_name if st.session_state.reader_name else rea_full)
 
-    # NEW CHANGEOVER LOGIC
     st.session_state.diff_changeover_analyst = st.radio("Was the Changeover performed by a different analyst?", ["No", "Yes"], index=0 if st.session_state.diff_changeover_analyst == "No" else 1, horizontal=True)
     
     if st.session_state.diff_changeover_analyst == "Yes":
@@ -325,13 +324,11 @@ if st.session_state.active_platform == "ScanRDI":
             chg_full = get_full_name(st.session_state.changeover_initial)
             st.session_state.changeover_name = st.text_input("Changeover Full Name", value=st.session_state.changeover_name if st.session_state.changeover_name else chg_full)
     else:
-        # Auto-fill if No
         st.session_state.changeover_initial = st.session_state.analyst_initial
         st.session_state.changeover_name = st.session_state.analyst_name
 
     st.divider()
 
-    # BSC LOGIC
     e1, e2 = st.columns(2)
     bsc_list = ["1310", "1309", "1311", "1312", "1314", "1313", "1316", "1798", "Other"]
     with e1:
@@ -518,7 +515,15 @@ if st.button("🚀 GENERATE FINAL REPORT"):
     st.session_state.sample_history_paragraph = hist_txt
     st.session_state.cross_contamination_summary = cc_txt
     st.session_state.narrative_summary = narr_txt
-    st.session_state.em_details = em_txt
+    
+    # Merge Logic for Template
+    if em_txt:
+        # Merge if there is detail text
+        st.session_state.narrative_summary = f"{narr_txt}\n\n{em_txt}"
+        st.session_state.em_details = "" # Clear this so it doesn't double print
+    else:
+        st.session_state.narrative_summary = narr_txt
+        st.session_state.em_details = ""
 
     template_name = f"{st.session_state.active_platform} OOS template.docx"
     if os.path.exists(template_name):
