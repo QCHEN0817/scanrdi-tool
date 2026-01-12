@@ -331,34 +331,6 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.control_lot = st.text_input("Control Lot", st.session_state.control_lot)
         st.session_state.control_exp = st.text_input("Control Exp Date", st.session_state.control_exp)
 
-    st.header("4. EM Observations")
-    em1, em2, em3 = st.columns(3)
-    with em1:
-        st.session_state.obs_pers = st.text_input("Personnel Obs", st.session_state.obs_pers)
-        st.session_state.etx_pers = st.text_input("Pers ETX #", st.session_state.etx_pers)
-        st.session_state.id_pers = st.text_input("Pers ID", st.session_state.id_pers)
-    with em2:
-        st.session_state.obs_surf = st.text_input("Surface Obs", st.session_state.obs_surf)
-        st.session_state.etx_surf = st.text_input("Surf ETX #", st.session_state.etx_surf)
-        st.session_state.id_surf = st.text_input("Surf ID", st.session_state.id_surf)
-    with em3:
-        st.session_state.obs_sett = st.text_input("Settling Obs", st.session_state.obs_sett)
-        st.session_state.etx_sett = st.text_input("Sett ETX #", st.session_state.etx_sett)
-        st.session_state.id_sett = st.text_input("Sett ID", st.session_state.id_sett)
-
-    st.subheader("Weekly Bracketing")
-    wk1, wk2 = st.columns(2)
-    with wk1:
-        st.session_state.obs_air = st.text_input("Weekly Air Obs", st.session_state.obs_air)
-        st.session_state.etx_air_weekly = st.text_input("Weekly Air ETX #", st.session_state.etx_air_weekly)
-        st.session_state.id_air_weekly = st.text_input("Weekly Air ID", st.session_state.id_air_weekly)
-        st.session_state.weekly_init = st.text_input("Weekly Monitor Initials", st.session_state.weekly_init)
-    with wk2:
-        st.session_state.obs_room = st.text_input("Weekly Surf Obs", st.session_state.obs_room)
-        st.session_state.etx_room_weekly = st.text_input("Weekly Surf ETX #", st.session_state.etx_room_weekly)
-        st.session_state.id_room_wk_of = st.text_input("Weekly Surf ID", st.session_state.id_room_wk_of)
-        st.session_state.date_weekly = st.text_input("Date of Weekly Monitoring", st.session_state.date_weekly)
-
     # --- GENERATE LIVE TEXTS ---
     equip_txt, hist_txt, cc_txt, narr_txt, em_txt = generate_live_texts()
     
@@ -367,6 +339,44 @@ if st.session_state.active_platform == "ScanRDI":
     st.session_state.cross_contamination_summary = cc_txt
     st.session_state.narrative_summary = narr_txt
     st.session_state.em_details = em_txt
+
+    # --- SECTION 4: EM OBSERVATIONS & TEXTS ---
+    st.header("4. EM Observations")
+    col_em_inputs, col_em_texts = st.columns([1.5, 1])
+    
+    with col_em_inputs:
+        st.subheader("Daily EM")
+        e1, e2, e3 = st.columns(3)
+        with e1:
+            st.session_state.obs_pers = st.text_input("Personnel Obs", st.session_state.obs_pers)
+            st.session_state.etx_pers = st.text_input("Pers ETX #", st.session_state.etx_pers)
+            st.session_state.id_pers = st.text_input("Pers ID", st.session_state.id_pers)
+        with e2:
+            st.session_state.obs_surf = st.text_input("Surface Obs", st.session_state.obs_surf)
+            st.session_state.etx_surf = st.text_input("Surf ETX #", st.session_state.etx_surf)
+            st.session_state.id_surf = st.text_input("Surf ID", st.session_state.id_surf)
+        with e3:
+            st.session_state.obs_sett = st.text_input("Settling Obs", st.session_state.obs_sett)
+            st.session_state.etx_sett = st.text_input("Sett ETX #", st.session_state.etx_sett)
+            st.session_state.id_sett = st.text_input("Sett ID", st.session_state.id_sett)
+        
+        st.subheader("Weekly Bracketing")
+        w1, w2 = st.columns(2)
+        with w1:
+            st.session_state.obs_air = st.text_input("Weekly Air Obs", st.session_state.obs_air)
+            st.session_state.etx_air_weekly = st.text_input("Weekly Air ETX #", st.session_state.etx_air_weekly)
+            st.session_state.id_air_weekly = st.text_input("Weekly Air ID", st.session_state.id_air_weekly)
+            st.session_state.weekly_init = st.text_input("Weekly Monitor Initials", st.session_state.weekly_init)
+        with w2:
+            st.session_state.obs_room = st.text_input("Weekly Surf Obs", st.session_state.obs_room)
+            st.session_state.etx_room_weekly = st.text_input("Weekly Surf ETX #", st.session_state.etx_room_weekly)
+            st.session_state.id_room_wk_of = st.text_input("Weekly Surf ID", st.session_state.id_room_wk_of)
+            st.session_state.date_weekly = st.text_input("Date of Weekly Monitoring", st.session_state.date_weekly)
+
+    with col_em_texts:
+        st.subheader("Generated Narrative & Details (Editable)")
+        st.session_state.narrative_summary = st.text_area("Narrative Summary", value=narr_txt, height=150, disabled=False, key="narr_editable")
+        st.session_state.em_details = st.text_area("EM Details", value=em_txt, height=250, disabled=False, key="em_editable")
 
     # --- SECTION 5: LIVE SIDE-BY-SIDE ---
     st.header("5. Automated Summaries & Analysis")
@@ -422,41 +432,6 @@ if st.session_state.active_platform == "ScanRDI":
     with c2:
         st.subheader("Generated Cross-Contam Text (Editable)")
         st.session_state.cross_contamination_summary = st.text_area("Cross-Contam Text", value=cc_txt, height=350, disabled=False, key="cc_editable")
-
-    st.divider()
-
-    # 3. Narrative & EM (Restored & Editable)
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("EM Findings Summary (Inputs)")
-        
-        em_findings = []
-        if st.session_state.obs_pers.strip(): em_findings.append(f"🔴 Personnel: {st.session_state.obs_pers}")
-        else: em_findings.append("✅ Personnel: No Growth")
-        
-        if st.session_state.obs_surf.strip(): em_findings.append(f"🔴 Surface: {st.session_state.obs_surf}")
-        else: em_findings.append("✅ Surface: No Growth")
-        
-        if st.session_state.obs_sett.strip(): em_findings.append(f"🔴 Settling: {st.session_state.obs_sett}")
-        else: em_findings.append("✅ Settling: No Growth")
-        
-        if st.session_state.obs_air.strip(): em_findings.append(f"🔴 Weekly Air: {st.session_state.obs_air}")
-        else: em_findings.append("✅ Weekly Air: No Growth")
-        
-        if st.session_state.obs_room.strip(): em_findings.append(f"🔴 Weekly Room: {st.session_state.obs_room}")
-        else: em_findings.append("✅ Weekly Room: No Growth")
-        
-        for f in em_findings:
-            st.text(f)
-
-    with c2:
-        st.subheader("Generated Narrative & EM Details (Editable)")
-        st.session_state.narrative_summary = st.text_area("Narrative Summary", value=narr_txt, height=120, disabled=False, key="narr_editable")
-        st.session_state.em_details = st.text_area("EM Details", value=em_txt, height=200, disabled=False, key="em_editable")
-
-    st.divider()
-    st.subheader("Equipment Summary (Editable)")
-    st.session_state.equipment_summary = st.text_area("Equipment Summary", value=equip_txt, height=200, disabled=False, key="equip_editable")
 
     save_current_state()
 
