@@ -37,7 +37,8 @@ def save_current_state():
     try:
         with open(STATE_FILE, "w") as f:
             json.dump(data_to_save, f)
-        # Optional: st.toast("✅ Progress saved!", icon="💾")
+        # Optional toast disabled to prevent spamming
+        # st.toast("✅ Progress saved!", icon="💾")
     except Exception as e:
         st.error(f"Could not save state: {e}")
 
@@ -99,7 +100,7 @@ field_keys = [
     "date_weekly", "equipment_summary", "narrative_summary", "em_details", 
     "sample_history_paragraph", "incidence_count", "oos_refs",
     "other_positives", "cross_contamination_summary",
-    "postive_1", "postive_1_order", "postive_order", "positive_count",
+    "other_positives_ids", "other_positives_orders", "postive_order", "positive_count", # Updated keys
     "diff_changeover_bsc", "has_prior_failures"
 ]
 
@@ -303,10 +304,10 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.other_positives = st.radio("Did other samples test positive on the same day?", ["No", "Yes"], index=0 if st.session_state.other_positives == "No" else 1, horizontal=True)
         
         if st.session_state.other_positives == "Yes":
-            st.session_state.postive_1 = st.text_input("Other Positive Sample ID (e.g. ETX-12345)", st.session_state.postive_1)
+            st.session_state.other_positives_ids = st.text_input("Other Positive Sample ID(s) (e.g. ETX-123, ETX-456)", st.session_state.other_positives_ids)
             c1, c2 = st.columns(2)
             with c1:
-                st.session_state.postive_1_order = st.text_input("Order of OTHER sample (e.g. 1st, 2nd)", st.session_state.postive_1_order)
+                st.session_state.other_positives_orders = st.text_input("Order of OTHER sample(s) (e.g. 1st, 2nd)", st.session_state.other_positives_orders)
                 st.session_state.positive_count = st.text_input("Total Positive Count (word)", value=st.session_state.positive_count)
             with c2:
                 st.session_state.postive_order = st.text_input("Order of CURRENT sample (e.g. 10th)", st.session_state.postive_order)
@@ -368,14 +369,15 @@ if st.session_state.active_platform == "ScanRDI":
             hist_phrase = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
         st.session_state.sample_history_paragraph = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” has had {hist_phrase} using the Scan RDI method during this period."
 
-        # --- 3. CROSS-CONTAMINATION LOGIC ---
+        # --- 3. CROSS-CONTAMINATION LOGIC (Multi-Sample Ready) ---
         if st.session_state.other_positives == "No":
             st.session_state.cross_contamination_summary = "All other samples processed by the analyst and other analysts that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
         else:
+            # Allows user to list multiple IDs (e.g. "ETX-123 and ETX-456")
             st.session_state.cross_contamination_summary = (
-                f"{st.session_state.postive_1} and {st.session_state.sample_id} were the {st.session_state.positive_count} samples tested positive for microbial growth. "
+                f"{st.session_state.other_positives_ids} and {st.session_state.sample_id} were the {st.session_state.positive_count} samples tested positive for microbial growth. "
                 f"The analyst confirmed that these samples were not processed concurrently, sequentially, or within the same manifold run. "
-                f"Specifically, {st.session_state.postive_1} was the {st.session_state.postive_1_order} sample processed, while {st.session_state.sample_id} was the {st.session_state.postive_order}. "
+                f"Specifically, {st.session_state.other_positives_ids} was processed as {st.session_state.other_positives_orders}, while {st.session_state.sample_id} was the {st.session_state.postive_order}. "
                 f"The analyst also verified that gloves were thoroughly disinfected between samples. "
                 f"Furthermore, all other samples processed by the analyst that day tested negative. "
                 f"These findings suggest that cross-contamination between samples is highly unlikely."
