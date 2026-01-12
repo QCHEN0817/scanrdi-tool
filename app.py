@@ -252,7 +252,8 @@ def generate_narrative_and_details():
         
         detail_parts = []
         for f in failures:
-            part = f"{f['obs']} was detected during {f['cat']} under sample ID {f['etx']}, where the organism identified was {f['id']}"
+            # CORRECTED GRAMMAR AS REQUESTED
+            part = f"{f['obs']} was detected during {f['cat']} and was submitted for microbial identification under sample ID {f['etx']}, where the organism was identified as {f['id']}"
             detail_parts.append(part)
         
         if len(detail_parts) == 1:
@@ -397,7 +398,7 @@ if st.session_state.active_platform == "ScanRDI":
             st.caption(f"Changeover: Suite {c_suite}{c_suffix} ({c_loc}) [Room ID: {c_room}]")
         else:
             st.session_state.chgbsc_id = st.session_state.bsc_id
-            # REMOVED st.info HERE as requested
+            st.info(f"Changeover BSC set to {st.session_state.bsc_id}")
 
     st.header("3. Findings & EM Data")
     f1, f2 = st.columns(2)
@@ -471,7 +472,6 @@ if st.session_state.active_platform == "ScanRDI":
         st.subheader("EM Growth Details (Editable)")
         st.text_area("Details Content", key="em_details", height=200, label_visibility="collapsed")
     else:
-        # Default No Growth Logic
         st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, and settling plates. Additionally, weekly active air sampling and weekly surface sampling showed no microbial growth."
         st.session_state.em_details = ""
 
@@ -483,10 +483,8 @@ if st.session_state.active_platform == "ScanRDI":
     if st.session_state.has_prior_failures == "Yes":
         # FIXED: Ensure incidence_count starts at 1
         if st.session_state.incidence_count < 1: st.session_state.incidence_count = 1
-        # Use a variable to capture the number input value immediately
         count = st.number_input("Number of Prior Failures", min_value=1, step=1, key="incidence_count")
         
-        # Use the captured variable 'count' for the loop range
         for i in range(count):
             if f"prior_oos_{i}" not in st.session_state: st.session_state[f"prior_oos_{i}"] = ""
             st.text_input(f"Prior Failure #{i+1} OOS ID", key=f"prior_oos_{i}")
@@ -514,7 +512,6 @@ if st.session_state.active_platform == "ScanRDI":
             with sub_c1:
                 st.text_input(f"Other Sample #{i+1} ID", key=f"other_id_{i}")
             with sub_c2:
-                # Ensure default is 1
                 if f"other_order_{i}" not in st.session_state: st.session_state[f"other_order_{i}"] = 1
                 st.number_input(f"Other Sample #{i+1} Order", min_value=1, step=1, key=f"other_order_{i}")
         
@@ -531,7 +528,6 @@ if st.session_state.active_platform == "ScanRDI":
 # --- FINAL GENERATION ---
 st.divider()
 if st.button("🚀 GENERATE FINAL REPORT"):
-    # Generate background texts
     st.session_state.equipment_summary = generate_equipment_text()
     
     if st.session_state.em_growth_observed == "No":
