@@ -38,7 +38,7 @@ field_keys = [
     "other_positives", "cross_contamination_summary",
     "total_pos_count_num", "current_pos_order",
     "diff_changeover_bsc", "has_prior_failures",
-    "em_growth_observed" # New Key
+    "em_growth_observed"
 ]
 for i in range(10):
     field_keys.append(f"other_id_{i}")
@@ -159,36 +159,15 @@ def generate_live_texts():
 
         cc_text = f"{ids_str} were the {count_word} samples tested positive for microbial growth. The analyst confirmed that these samples were not processed concurrently, sequentially, or within the same manifold run. Specifically, {details_str}. The analyst also verified that gloves were thoroughly disinfected between samples. Furthermore, all other samples processed by the analyst that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
 
-    # 4. Narrative & EM (Logic accounts for "No Growth" selection)
-    if st.session_state.em_growth_observed == "No":
-        # Force Clean Lists
-        em_clean = ["personal sampling (left touch and right touch)", "surface sampling", "settling plates"]
-        wk_clean = ["weekly active air sampling", "weekly surface sampling"]
-        growth_source_list = [] # No details
-    else:
-        # Use actual inputs
-        em_clean = []
-        if not st.session_state.obs_pers.strip(): em_clean.append("personal sampling (left touch and right touch)")
-        if not st.session_state.obs_surf.strip(): em_clean.append("surface sampling")
-        if not st.session_state.obs_sett.strip(): em_clean.append("settling plates")
-        wk_clean = []
-        if not st.session_state.obs_air.strip(): wk_clean.append("weekly active air sampling")
-        if not st.session_state.obs_room.strip(): wk_clean.append("weekly surface sampling")
-        
-        # Build Details List
-        growth_source_list = []
-        sources_config = [
-            ("personnel sampling", st.session_state.obs_pers, st.session_state.etx_pers, st.session_state.id_pers, "on the date of testing"),
-            ("surface sampling", st.session_state.obs_surf, st.session_state.etx_surf, st.session_state.id_surf, "on the date of testing"),
-            ("settling plates", st.session_state.obs_sett, st.session_state.etx_sett, st.session_state.id_sett, "on the date of testing"),
-            ("weekly active air sampling", st.session_state.obs_air, st.session_state.etx_air_weekly, st.session_state.id_air_weekly, "the week of testing"),
-            ("surface sampling of cleanroom during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room_weekly, st.session_state.id_room_wk_of, "the week of testing")
-        ]
-        for cat, obs, etx, oid, tcontext in sources_config:
-            if obs.strip():
-                growth_source_list.append((cat, obs, etx, oid, tcontext))
+    # 4. Narrative
+    em_clean = []
+    if not st.session_state.obs_pers.strip(): em_clean.append("personal sampling (left touch and right touch)")
+    if not st.session_state.obs_surf.strip(): em_clean.append("surface sampling")
+    if not st.session_state.obs_sett.strip(): em_clean.append("settling plates")
+    wk_clean = []
+    if not st.session_state.obs_air.strip(): wk_clean.append("weekly active air sampling")
+    if not st.session_state.obs_room.strip(): wk_clean.append("weekly surface sampling")
 
-    # Construct Narrative Text
     narr_text = "Upon analyzing the environmental monitoring results, "
     if em_clean:
         if len(em_clean) == 1: clean_str = em_clean[0]
@@ -203,18 +182,23 @@ def generate_live_texts():
         else: wk_str = ", ".join(wk_clean[:-1]) + ", and " + wk_clean[-1]
         narr_text += f"Additionally, {wk_str} showed no microbial growth."
 
-    # Construct Details Text
-    if not growth_source_list:
-        em_text = ""
-    else:
-        details_str_list = []
-        for category, obs, etx, org_id, time_context in growth_source_list:
+    # 5. EM Details
+    sources_config = [
+        ("personnel sampling", st.session_state.obs_pers, st.session_state.etx_pers, st.session_state.id_pers, "on the date of testing"),
+        ("surface sampling", st.session_state.obs_surf, st.session_state.etx_surf, st.session_state.id_surf, "on the date of testing"),
+        ("settling plates", st.session_state.obs_sett, st.session_state.etx_sett, st.session_state.id_sett, "on the date of testing"),
+        ("weekly active air sampling", st.session_state.obs_air, st.session_state.etx_air_weekly, st.session_state.id_air_weekly, "the week of testing"),
+        ("surface sampling of cleanroom during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room_weekly, st.session_state.id_room_wk_of, "the week of testing")
+    ]
+    details_list = []
+    for category, obs, etx, org_id, time_context in sources_config:
+        if obs.strip():
             is_sing = ("1" in obs and "CFU" in obs.upper() and "11" not in obs and "21" not in obs)
             growth_term, plate_term = ("growth was", "plate was") if is_sing else ("growths were", "plates were")
             id_label = "sample IDs" if ("," in etx or "AND" in etx.upper()) else "sample ID"
             org_verb = "organisms identified included" if ("," in org_id or "AND" in org_id.upper()) else "organism identified was"
-            details_str_list.append(f"However, microbial {growth_term} observed in {category} {time_context}. Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} {etx}. The {org_verb} {org_id}.")
-        em_text = "\n\n".join(details_str_list)
+            details_list.append(f"However, microbial {growth_term} observed in {category} {time_context}. Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} {etx}. The {org_verb} {org_id}.")
+    em_text = "\n\n".join(details_list)
 
     return equip_text, hist_text, cc_text, narr_text, em_text
 
@@ -232,7 +216,7 @@ for k in field_keys:
     elif k == "current_pos_order": init_state(k, 1) 
     elif k == "diff_changeover_bsc": init_state(k, "No")
     elif k == "has_prior_failures": init_state(k, "No")
-    elif k == "em_growth_observed": init_state(k, "No") # Init new key
+    elif k == "em_growth_observed": init_state(k, "No")
     else: init_state(k, "")
 
 if "data_loaded" not in st.session_state:
@@ -390,10 +374,7 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.obs_room = st.text_input("Weekly Surf Obs", st.session_state.obs_room)
             st.session_state.etx_room_weekly = st.text_input("Weekly Surf ETX #", st.session_state.etx_room_weekly)
             st.session_state.id_room_wk_of = st.text_input("Weekly Surf ID", st.session_state.id_room_wk_of)
-    else:
-        st.info("Standard 'No Growth' text will be generated automatically. You can proceed.")
-        # We assume empty fields if "No" is selected, so the logic in generate_live_texts handles it.
-
+    
     # Weekly Metadata (Always visible because required for table)
     st.divider()
     st.caption("Weekly Bracketing (Date & Initials Required)")
