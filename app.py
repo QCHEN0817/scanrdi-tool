@@ -307,11 +307,15 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         final_data = {k: v for k, v in st.session_state.items()}
         final_data["oos_full"] = f"OOS-{st.session_state.oos_id}"
         
-        # --- FIXED: Explicitly map cr_suit AND cr_id for the template ---
+        # --- FIXED: Explicitly map cr_suit, cr_id, control_positive, control_data ---
         if st.session_state.active_platform == "ScanRDI":
             room_num, suite_num, _, _ = get_room_logic(st.session_state.bsc_id)
             final_data["cr_suit"] = suite_num
-            final_data["cr_id"] = room_num  # Explicitly added mapping for {{ cr_id }}
+            final_data["cr_id"] = room_num
+            
+            # Map Controls
+            final_data["control_positive"] = st.session_state.control_pos
+            final_data["control_data"] = st.session_state.control_exp
 
         for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
             if not final_data[key].strip(): final_data[key] = "No Growth"
@@ -324,4 +328,4 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         out_name = f"OOS-{st.session_state.oos_id} {st.session_state.client_name} ({st.session_state.sample_id}) - {st.session_state.active_platform}.docx"
         doc.save(out_name)
         with open(out_name, "rb") as f:
-            st.download_button("📂 Download Document", f, file_name=out_name)
+            st.
