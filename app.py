@@ -30,27 +30,27 @@ def get_full_name(initials):
     return lookup.get(initials.upper().strip(), "")
 
 def get_room_logic(bsc_id):
-    # Returns: room_id (cr_id), suite (cr_suit), suffix (A/B), location description
+    # Returns: room_id, suite, suffix (A/B), location_desc
     try:
         num = int(bsc_id)
-        suffix = "B" if num % 2 == 0 else "A"
-        location = "innermost ISO 7 room" if suffix == "B" else "middle ISO 7 buffer room"
-    except: suffix, location = "B", "innermost ISO 7 room"
+        if num % 2 == 0:
+            suffix = "B"
+            location = "innermost ISO 7 room"
+        else:
+            suffix = "A"
+            location = "middle ISO 7 buffer room"
+    except: 
+        suffix, location = "B", "innermost ISO 7 room"
     
-    # 1. Map BSC ID to Suite
+    # Map BSC ID to Suite
     if bsc_id in ["1310", "1309"]: suite = "117"
     elif bsc_id in ["1311", "1312"]: suite = "116"
     elif bsc_id in ["1314", "1313"]: suite = "115"
     elif bsc_id in ["1316", "1798"]: suite = "114"
     else: suite = "Unknown"
     
-    # 2. Map Suite to Room ID (cr_id) based on user rule
-    room_map = {
-        "117": "1739",
-        "116": "1738",
-        "115": "1737",
-        "114": "1736"
-    }
+    # Map Suite to Room ID
+    room_map = {"117": "1739", "116": "1738", "115": "1737", "114": "1736"}
     room_id = room_map.get(suite, "Unknown")
     
     return room_id, suite, suffix, location
@@ -78,14 +78,10 @@ field_keys = [
 ]
 
 for k in field_keys:
-    if k == "incidence_count":
-        init_state(k, 0)
-    elif k == "shift_number":
-        init_state(k, "1")
-    elif "etx" in k or "id" in k:
-        init_state(k, "N/A")
-    else:
-        init_state(k, "")
+    if k == "incidence_count": init_state(k, 0)
+    elif k == "shift_number": init_state(k, "1")
+    elif "etx" in k or "id" in k: init_state(k, "N/A")
+    else: init_state(k, "")
 
 # --- EMAIL PARSER LOGIC ---
 def parse_email_text(text):
@@ -192,14 +188,11 @@ if st.session_state.active_platform == "ScanRDI":
     with f1:
         scan_ids = ["1230", "2017", "1040", "1877", "2225", "2132"]
         st.session_state.scan_id = st.selectbox("ScanRDI ID", scan_ids, index=scan_ids.index(st.session_state.scan_id) if st.session_state.scan_id in scan_ids else 0)
-        
         st.session_state.shift_number = st.text_input("Shift Number", st.session_state.shift_number)
-
         shape_opts = ["rod", "cocci", "Other"]
         st.session_state.org_choice = st.selectbox("Org Shape", shape_opts, index=shape_opts.index(st.session_state.org_choice) if st.session_state.org_choice in shape_opts else 0)
         if st.session_state.org_choice == "Other":
             st.session_state.manual_org = st.text_input("Enter Manual Org Shape", st.session_state.manual_org)
-        
         try:
             date_part = datetime.strptime(st.session_state.test_date, "%d%b%y").strftime("%m%d%y")
             st.session_state.test_record = f"{date_part}-{st.session_state.scan_id}-{st.session_state.shift_number}"
@@ -250,17 +243,48 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.oos_refs = st.text_input("Related OOS IDs (e.g. OOS-25001, OOS-25002)", st.session_state.oos_refs)
 
     if st.button("🪄 Auto-Generate All"):
-        # 1. Equipment Summary
-        st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name}, and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {st.session_state.changeover_name}."
+        # --- 1. EQUIPMENT SUMMARY LOGIC ---
+        t_room, t_suite, t_suffix, t_loc = get_room_logic(st.session_state.bsc_id)
+        c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
         
-        # 2. History Logic (Full Paragraph)
+        if st.session_state.bsc_id == st.session_state.chgbsc_id:
+            # Single BSC Scenario
+            st.session_state.equipment_summary = (
+                f"The cleanroom used for testing and changeover procedures (Suite {t_suite}) comprises three interconnected sections: "
+                f"the innermost ISO 7 cleanroom ({t_suite}B), which connects to the middle ISO 7 buffer room ({t_suite}A), "
+                f"and then to the outermost ISO 8 anteroom ({t_suite}). A positive air pressure system is maintained throughout the suite "
+                f"to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}.\n\n"
+                f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), was used for both testing and changeover steps. "
+                f"It was thoroughly cleaned and disinfected prior to each procedure in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). "
+                f"Additionally, BSC E00{st.session_state.bsc_id} was certified and approved by both the Engineering and Quality Assurance teams. "
+                f"Sample processing and changeover were conducted in the ISO 5 BSC E00{st.session_state.bsc_id} in the {t_loc}, "
+                f"(Suite {t_suite}{t_suffix}) by {st.session_state.analyst_name} on {st.session_state.test_date}."
+            )
+        else:
+            # Dual BSC Scenario
+            st.session_state.equipment_summary = (
+                f"The cleanroom used for testing (E00{t_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), "
+                f"which opens into the middle ISO 7 buffer room ({t_suite}A), and then into the outermost ISO 8 anteroom ({t_suite}). "
+                f"A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}.\n\n"
+                f"The cleanroom used for changeover (E00{c_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({c_suite}B), "
+                f"which opens into the middle ISO 7 buffer room ({c_suite}A), and then into the outermost ISO 8 anteroom ({c_suite}). "
+                f"A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {c_suite}B through {c_suite}A and into {c_suite}.\n\n"
+                f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), and "
+                f"ISO 5 BSC E00{st.session_state.chgbsc_id}, located in the {c_loc}, (Suite {c_suite}{c_suffix}), were thoroughly cleaned and disinfected prior to their respective procedures "
+                f"in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). Furthermore, the BSCs used throughout testing, "
+                f"E00{st.session_state.bsc_id} for sample processing and E00{st.session_state.chgbsc_id} for the changeover step, were certified and approved by both the Engineering and Quality Assurance teams. "
+                f"Sample processing was conducted within the ISO 5 BSC in the {t_loc} (Suite {t_suite}{t_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name} "
+                f"and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) "
+                f"by {st.session_state.changeover_name} on {st.session_state.test_date}."
+            )
+
+        # 2. History Logic
         if st.session_state.incidence_count == 0:
             hist_phrase = "no prior failures"
         elif st.session_state.incidence_count == 1:
             hist_phrase = f"1 incident ({st.session_state.oos_refs})"
         else:
             hist_phrase = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
-        
         st.session_state.sample_history_paragraph = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” has had {hist_phrase} using the Scan RDI method during this period."
 
         # 3. Narrative/EM Logic
@@ -294,7 +318,7 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.em_details = "\n\n".join(details_list)
         st.rerun()
 
-    st.session_state.equipment_summary = st.text_area("Equipment Summary (Editable)", value=st.session_state.equipment_summary, height=120)
+    # st.session_state.equipment_summary = st.text_area("Equipment Summary (Editable)", value=st.session_state.equipment_summary, height=200)
     st.session_state.sample_history_paragraph = st.text_area("Sample History (Full Paragraph Editable)", value=st.session_state.sample_history_paragraph, height=100)
     st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=120)
     st.session_state.em_details = st.text_area("EM Growth Details (Editable)", value=st.session_state.em_details, height=150)
@@ -307,15 +331,57 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         final_data = {k: v for k, v in st.session_state.items()}
         final_data["oos_full"] = f"OOS-{st.session_state.oos_id}"
         
-        # --- FIXED: Explicitly map cr_suit, cr_id, control_positive, control_data ---
         if st.session_state.active_platform == "ScanRDI":
-            room_num, suite_num, _, _ = get_room_logic(st.session_state.bsc_id)
-            final_data["cr_suit"] = suite_num
-            final_data["cr_id"] = room_num
+            # Map Room Logic
+            t_room, t_suite, t_suffix, t_loc = get_room_logic(st.session_state.bsc_id)
+            final_data["cr_suit"] = t_suite
+            final_data["cr_id"] = t_room
+            final_data["suit"] = t_suffix
+            final_data["bsc_location"] = t_loc
+            
+            c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
+            final_data["changeover_id"] = c_room
+            final_data["changeover_suit"] = c_suite
+            final_data["changeoversuit"] = c_suffix
+            final_data["changeover_location"] = c_loc
+            final_data["changeoverbsc_id"] = st.session_state.chgbsc_id
+            
+            final_data["changeover_name"] = st.session_state.changeover_name
+            final_data["analyst_name"] = st.session_state.analyst_name
             
             # Map Controls
             final_data["control_positive"] = st.session_state.control_pos
             final_data["control_data"] = st.session_state.control_exp
+            
+            # Map Organism Morphology (FIXED)
+            if st.session_state.org_choice == "Other":
+                final_data["organism_morphology"] = st.session_state.manual_org
+            else:
+                final_data["organism_morphology"] = st.session_state.org_choice
+
+            # Map EM Table Variables to Template Tags
+            final_data["obs_pers_dur"] = st.session_state.obs_pers
+            final_data["etx_pers_dur"] = st.session_state.etx_pers
+            final_data["id_pers_dur"] = st.session_state.id_pers
+            
+            final_data["obs_surf_dur"] = st.session_state.obs_surf
+            final_data["etx_surf_dur"] = st.session_state.etx_surf
+            final_data["id_surf_dur"] = st.session_state.id_surf
+            
+            final_data["obs_sett_dur"] = st.session_state.obs_sett
+            final_data["etx_sett_dur"] = st.session_state.etx_sett
+            final_data["id_sett_dur"] = st.session_state.id_sett
+            
+            final_data["obs_air_wk_of"] = st.session_state.obs_air
+            final_data["etx_air_wk_of"] = st.session_state.etx_air_weekly
+            final_data["id_air_wk_of"] = st.session_state.id_air_weekly
+            
+            final_data["obs_room_wk_of"] = st.session_state.obs_room
+            final_data["etx_room_wk_of"] = st.session_state.etx_room_weekly
+            final_data["id_room_wk_of"] = st.session_state.id_room_weekly
+            
+            final_data["weekly_initial"] = st.session_state.weekly_init
+            final_data["date_of_weekly"] = st.session_state.date_weekly
 
         for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
             if not final_data[key].strip(): final_data[key] = "No Growth"
