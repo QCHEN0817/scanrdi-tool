@@ -373,10 +373,12 @@ if st.session_state.active_platform == "ScanRDI":
 
     st.divider()
     
-    # EDITABLE TEXT AREAS (Stacked Below Inputs)
-    st.subheader("Generated EM Summary & Details (Editable)")
-    st.session_state.narrative_summary = st.text_area("Narrative Summary", value=narr_txt, height=120, disabled=False, key="narr_editable")
-    st.session_state.em_details = st.text_area("EM Details", value=em_txt, height=200, disabled=False, key="em_editable")
+    # EDITABLE TEXT AREAS (Stacked Below Inputs, matching requested style )
+    st.subheader("Narrative Summary (Editable)")
+    st.session_state.narrative_summary = st.text_area("Narrative Summary Content", value=narr_txt, height=120, disabled=False, key="narr_editable", label_visibility="collapsed")
+
+    st.subheader("EM Growth Details (Editable)")
+    st.session_state.em_details = st.text_area("EM Details Content", value=em_txt, height=200, disabled=False, key="em_editable", label_visibility="collapsed")
 
     # --- SECTION 5 ---
     st.header("5. Automated Summaries & Analysis")
@@ -394,7 +396,7 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.incidence_count = 0
         st.session_state.oos_refs = ""
         
-    st.session_state.sample_history_paragraph = st.text_area("History Text (Editable)", value=hist_txt, height=120, disabled=False, key="hist_editable")
+    st.session_state.sample_history_paragraph = st.text_area("History Text Content", value=hist_txt, height=120, disabled=False, key="hist_editable", label_visibility="collapsed")
 
     st.divider()
 
@@ -425,7 +427,7 @@ if st.session_state.active_platform == "ScanRDI":
                 except: saved_order = 1
                 st.session_state[key_order] = st.number_input(f"Other Sample #{i+1} Order", key=f"input_order_{i}", value=max(1, saved_order), step=1)
     
-    st.session_state.cross_contamination_summary = st.text_area("Cross-Contam Text (Editable)", value=cc_txt, height=250, disabled=False, key="cc_editable")
+    st.session_state.cross_contamination_summary = st.text_area("Cross-Contam Text Content", value=cc_txt, height=250, disabled=False, key="cc_editable", label_visibility="collapsed")
 
     save_current_state()
 
@@ -477,7 +479,7 @@ if st.button("🚀 GENERATE FINAL REPORT"):
             
             final_data["obs_air_wk_of"] = st.session_state.obs_air
             final_data["etx_air_wk_of"] = st.session_state.etx_air_weekly
-            final_data["id_air_wk_of"] = st.session_state.id_air_wk_of
+            final_data["id_air_wk_of"] = st.session_state.id_air_weekly
             
             final_data["obs_room_wk_of"] = st.session_state.obs_room
             final_data["etx_room_wk_of"] = st.session_state.etx_room_weekly
