@@ -25,7 +25,6 @@ def load_saved_state():
         try:
             with open(STATE_FILE, "r") as f:
                 saved_data = json.load(f)
-            # Update session state with saved data
             for key, value in saved_data.items():
                 if key in st.session_state:
                     st.session_state[key] = value
@@ -34,7 +33,6 @@ def load_saved_state():
 
 def save_current_state():
     """Saves the current session state to a JSON file."""
-    # Filter only the keys we care about
     data_to_save = {k: v for k, v in st.session_state.items() if k in field_keys}
     try:
         with open(STATE_FILE, "w") as f:
@@ -70,14 +68,12 @@ def get_room_logic(bsc_id):
     except: 
         suffix, location = "B", "innermost ISO 7 room"
     
-    # Map BSC ID to Suite
     if bsc_id in ["1310", "1309"]: suite = "117"
     elif bsc_id in ["1311", "1312"]: suite = "116"
     elif bsc_id in ["1314", "1313"]: suite = "115"
     elif bsc_id in ["1316", "1798"]: suite = "114"
     else: suite = "Unknown"
     
-    # Map Suite to Room ID
     room_map = {"117": "1739", "116": "1738", "115": "1737", "114": "1736"}
     room_id = room_map.get(suite, "Unknown")
     
@@ -146,7 +142,6 @@ def parse_email_text(text):
         st.session_state.analyst_initial = analyst_match.group(1).strip()
         st.session_state.analyst_name = get_full_name(st.session_state.analyst_initial)
     
-    # Auto-save after parsing
     save_current_state()
 
 # --- SIDEBAR ---
@@ -156,11 +151,8 @@ with st.sidebar:
     if st.button("Celsis"): st.session_state.active_platform = "Celsis"
     if st.button("USP 71"): st.session_state.active_platform = "USP 71"
     st.divider()
-    
-    # Manual Save Button
     if st.button("💾 Save Current Inputs"):
         save_current_state()
-        
     st.success(f"Active: {st.session_state.active_platform}")
 
 st.title(f"Sterility Investigation & Reporting: {st.session_state.active_platform}")
@@ -288,27 +280,33 @@ if st.session_state.active_platform == "ScanRDI":
         c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
         
         if st.session_state.bsc_id == st.session_state.chgbsc_id:
-            # Single BSC Scenario
-            st.session_state.equipment_summary = (
+            # Single BSC Paragraph Structure
+            part1 = (
                 f"The cleanroom used for testing and changeover procedures (Suite {t_suite}) comprises three interconnected sections: "
                 f"the innermost ISO 7 cleanroom ({t_suite}B), which connects to the middle ISO 7 buffer room ({t_suite}A), "
                 f"and then to the outermost ISO 8 anteroom ({t_suite}). A positive air pressure system is maintained throughout the suite "
-                f"to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}.\n\n"
+                f"to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}."
+            )
+            part2 = (
                 f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), was used for both testing and changeover steps. "
                 f"It was thoroughly cleaned and disinfected prior to each procedure in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). "
                 f"Additionally, BSC E00{st.session_state.bsc_id} was certified and approved by both the Engineering and Quality Assurance teams. "
                 f"Sample processing and changeover were conducted in the ISO 5 BSC E00{st.session_state.bsc_id} in the {t_loc}, "
                 f"(Suite {t_suite}{t_suffix}) by {st.session_state.analyst_name} on {st.session_state.test_date}."
             )
+            st.session_state.equipment_summary = f"{part1}\n\n{part2}"
+        
         else:
-            # Dual BSC Scenario
-            st.session_state.equipment_summary = (
+            # Dual BSC Paragraph Structure
+            part1 = (
                 f"The cleanroom used for testing (E00{t_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), "
                 f"which opens into the middle ISO 7 buffer room ({t_suite}A), and then into the outermost ISO 8 anteroom ({t_suite}). "
                 f"A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {t_suite}B through {t_suite}A and into {t_suite}.\n\n"
                 f"The cleanroom used for changeover (E00{c_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({c_suite}B), "
                 f"which opens into the middle ISO 7 buffer room ({c_suite}A), and then into the outermost ISO 8 anteroom ({c_suite}). "
-                f"A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {c_suite}B through {c_suite}A and into {c_suite}.\n\n"
+                f"A positive air pressure system is maintained throughout the suite to ensure controlled, unidirectional airflow from {c_suite}B through {c_suite}A and into {c_suite}."
+            )
+            part2 = (
                 f"The ISO 5 BSC E00{st.session_state.bsc_id}, located in the {t_loc}, (Suite {t_suite}{t_suffix}), and "
                 f"ISO 5 BSC E00{st.session_state.chgbsc_id}, located in the {c_loc}, (Suite {c_suite}{c_suffix}), were thoroughly cleaned and disinfected prior to their respective procedures "
                 f"in accordance with SOP 2.600.018 (Cleaning and Disinfecting Procedure for Microbiology). Furthermore, the BSCs used throughout testing, "
@@ -317,6 +315,7 @@ if st.session_state.active_platform == "ScanRDI":
                 f"and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) "
                 f"by {st.session_state.changeover_name} on {st.session_state.test_date}."
             )
+            st.session_state.equipment_summary = f"{part1}\n\n{part2}"
 
         # 2. History Logic
         if st.session_state.incidence_count == 0:
@@ -357,7 +356,6 @@ if st.session_state.active_platform == "ScanRDI":
                 details_list.append(f"However, microbial {growth_term} observed in {category} the week of testing. Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} {etx}. The {org_verb} {org_id}.")
             st.session_state.em_details = "\n\n".join(details_list)
         
-        # Save state automatically after generation logic
         save_current_state()
         st.rerun()
 
@@ -432,7 +430,6 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         out_name = f"OOS-{st.session_state.oos_id} {st.session_state.client_name} ({st.session_state.sample_id}) - {st.session_state.active_platform}.docx"
         doc.save(out_name)
         
-        # Save state one final time on generation
         save_current_state()
         
         with open(out_name, "rb") as f:
