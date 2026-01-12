@@ -39,7 +39,7 @@ field_keys = [
     "other_positives", "cross_contamination_summary",
     "total_pos_count_num", "current_pos_order",
     "diff_changeover_bsc", "has_prior_failures",
-    "em_growth_observed"
+    "em_growth_observed", "diff_changeover_analyst"
 ]
 for i in range(10):
     field_keys.append(f"other_id_{i}")
@@ -68,9 +68,7 @@ def save_current_state():
 def clean_filename(text):
     """Removes invalid characters and invisible newlines from filenames."""
     if not text: return ""
-    # Replace chars illegal in filenames on Windows/Linux but keep () and -
     clean = re.sub(r'[\\/*?:"<>|]', '_', str(text))
-    # Crucial: Strip invisible newlines/tabs from copy-pasting
     return clean.strip()
 
 def get_full_name(initials):
@@ -194,22 +192,22 @@ def generate_live_texts():
             if obs.strip():
                 growth_source_list.append((cat, obs, etx, oid, tcontext))
 
-    narr_txt = "Upon analyzing the environmental monitoring results, "
+    narr_text = "Upon analyzing the environmental monitoring results, "
     if em_clean:
         if len(em_clean) == 1: clean_str = em_clean[0]
         elif len(em_clean) == 2: clean_str = f"{em_clean[0]} and {em_clean[1]}"
         else: clean_str = f"{em_clean[0]}, {em_clean[1]}, and {em_clean[2]}"
-        narr_txt += f"no microbial growth was observed in {clean_str}. "
-    else: narr_txt += "microbial growth was observed during the testing period. "
+        narr_text += f"no microbial growth was observed in {clean_str}. "
+    else: narr_text += "microbial growth was observed during the testing period. "
 
     if wk_clean:
         if len(wk_clean) == 1: wk_str = wk_clean[0]
         elif len(wk_clean) == 2: wk_str = f"{wk_clean[0]} and {wk_clean[1]}"
         else: wk_str = ", ".join(wk_clean[:-1]) + ", and " + wk_clean[-1]
-        narr_txt += f"Additionally, {wk_str} showed no microbial growth."
+        narr_text += f"Additionally, {wk_str} showed no microbial growth."
 
     if not growth_source_list:
-        em_txt = ""
+        em_text = ""
     else:
         details_str_list = []
         for category, obs, etx, org_id, time_context in growth_source_list:
@@ -218,7 +216,7 @@ def generate_live_texts():
             id_label = "sample IDs" if ("," in etx or "AND" in etx.upper()) else "sample ID"
             org_verb = "organisms identified included" if ("," in org_id or "AND" in org_id.upper()) else "organism identified was"
             details_str_list.append(f"However, microbial {growth_term} observed in {category} {time_context}. Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} {etx}. The {org_verb} {org_id}.")
-        em_txt = "\n\n".join(details_str_list)
+        em_text = "\n\n".join(details_str_list)
 
     return equip_text, hist_text, cc_text, narr_text, em_text
 
@@ -237,6 +235,7 @@ for k in field_keys:
     elif k == "diff_changeover_bsc": init_state(k, "No")
     elif k == "has_prior_failures": init_state(k, "No")
     elif k == "em_growth_observed": init_state(k, "No")
+    elif k == "diff_changeover_analyst": init_state(k, "No") # Init new key
     else: init_state(k, "")
 
 if "data_loaded" not in st.session_state:
@@ -300,8 +299,8 @@ with col3:
 
 # --- SECTION 2 ---
 if st.session_state.active_platform == "ScanRDI":
-    st.header("2. Personnel & Changeover")
-    p1, p2, p3, p4 = st.columns(4)
+    st.header("2. Personnel") # Renamed from Personnel & Changeover
+    p1, p2, p3 = st.columns(3)
     with p1:
         st.session_state.prepper_initial = st.text_input("Prepper Initials", st.session_state.prepper_initial).upper()
         pre_full = get_full_name(st.session_state.prepper_initial)
@@ -311,14 +310,28 @@ if st.session_state.active_platform == "ScanRDI":
         ana_full = get_full_name(st.session_state.analyst_initial)
         st.session_state.analyst_name = st.text_input("Processor Full Name", value=st.session_state.analyst_name if st.session_state.analyst_name else ana_full)
     with p3:
-        st.session_state.changeover_initial = st.text_input("Changeover Initials", st.session_state.changeover_initial).upper()
-        chg_full = get_full_name(st.session_state.changeover_initial)
-        st.session_state.changeover_name = st.text_input("Changeover Full Name", value=st.session_state.changeover_name if st.session_state.changeover_name else chg_full)
-    with p4:
         st.session_state.reader_initial = st.text_input("Reader Initials", st.session_state.reader_initial).upper()
         rea_full = get_full_name(st.session_state.reader_initial)
         st.session_state.reader_name = st.text_input("Reader Full Name", value=st.session_state.reader_name if st.session_state.reader_name else rea_full)
 
+    # NEW CHANGEOVER LOGIC
+    st.session_state.diff_changeover_analyst = st.radio("Was the Changeover performed by a different analyst?", ["No", "Yes"], index=0 if st.session_state.diff_changeover_analyst == "No" else 1, horizontal=True)
+    
+    if st.session_state.diff_changeover_analyst == "Yes":
+        c1, c2 = st.columns(2)
+        with c1:
+            st.session_state.changeover_initial = st.text_input("Changeover Initials", st.session_state.changeover_initial).upper()
+        with c2:
+            chg_full = get_full_name(st.session_state.changeover_initial)
+            st.session_state.changeover_name = st.text_input("Changeover Full Name", value=st.session_state.changeover_name if st.session_state.changeover_name else chg_full)
+    else:
+        # Auto-fill if No
+        st.session_state.changeover_initial = st.session_state.analyst_initial
+        st.session_state.changeover_name = st.session_state.analyst_name
+
+    st.divider()
+
+    # BSC LOGIC
     e1, e2 = st.columns(2)
     bsc_list = ["1310", "1309", "1311", "1312", "1314", "1313", "1316", "1798", "Other"]
     with e1:
@@ -403,6 +416,7 @@ if st.session_state.active_platform == "ScanRDI":
     st.session_state.em_details = em_txt
 
     st.divider()
+    
     if st.session_state.em_growth_observed == "Yes":
         st.subheader("Narrative Summary (Editable)")
         st.session_state.narrative_summary = st.text_area("Narrative Summary Content", value=narr_txt, height=120, disabled=False, key="narr_editable", label_visibility="collapsed")
@@ -428,7 +442,7 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.incidence_count = 0
         st.session_state.oos_refs = ""
         
-    # RE-CALC HISTORY TEXT (After Inputs)
+    # RE-CALC HISTORY TEXT
     if st.session_state.incidence_count == 0: hist_phrase = "no prior failures"
     elif st.session_state.incidence_count == 1: hist_phrase = f"1 incident ({st.session_state.oos_refs})"
     else: hist_phrase = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
@@ -465,7 +479,7 @@ if st.session_state.active_platform == "ScanRDI":
                 except: saved_order = 1
                 st.session_state[key_order] = st.number_input(f"Other Sample #{i+1} Order", key=f"input_order_{i}", value=max(1, saved_order), step=1)
     
-    # RE-CALC CC TEXT (After Inputs)
+    # RE-CALC CC TEXT
     if st.session_state.other_positives == "No":
         cc_txt = "All other samples processed by the analyst and other analysts that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
     else:
@@ -499,7 +513,6 @@ if st.session_state.active_platform == "ScanRDI":
 # --- FINAL GENERATION ---
 st.divider()
 if st.button("🚀 GENERATE FINAL REPORT"):
-    # RE-RUN LOGIC ONE LAST TIME TO CAPTURE EVERYTHING
     equip_txt, hist_txt, cc_txt, narr_txt, em_txt = generate_live_texts()
     st.session_state.equipment_summary = equip_txt
     st.session_state.sample_history_paragraph = hist_txt
