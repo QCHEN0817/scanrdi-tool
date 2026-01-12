@@ -60,28 +60,21 @@ for k in field_keys:
 
 # --- EMAIL PARSER LOGIC ---
 def parse_email_text(text):
-    # 1. OOS Number (Numeric Only)
     oos_match = re.search(r"OOS-(\d+)", text)
     if oos_match: st.session_state.oos_id = oos_match.group(1)
 
-    # 2. Client Name (Now captures Name + E-Number in parens)
-    # Regex looks for: Any letters/spaces + optional space + (E + digits)
     client_match = re.search(r"([A-Za-z\s]+\(E\d+\))", text)
     if client_match: st.session_state.client_name = client_match.group(1).strip()
 
-    # 3. Sample ID (ETX format)
     etx_id_match = re.search(r"(ETX-\d{6}-\d{4})", text)
     if etx_id_match: st.session_state.sample_id = etx_id_match.group(1).strip()
 
-    # 4. Sample Name
     sample_match = re.search(r"Sample\s*Name:\s*(.*)", text, re.IGNORECASE)
     if sample_match: st.session_state.sample_name = sample_match.group(1).strip()
 
-    # 5. Lot Number
     lot_match = re.search(r"Lot:\s*(\w+)", text, re.IGNORECASE)
     if lot_match: st.session_state.lot_number = lot_match.group(1).strip()
 
-    # 6. Test Date (Converted to 07Jan26 format)
     date_match = re.search(r"testing\s*on\s*(\d{2}\s*\w{3}\s*\d{4})", text, re.IGNORECASE)
     if date_match:
         try:
@@ -89,7 +82,6 @@ def parse_email_text(text):
             st.session_state.test_date = d_obj.strftime("%d%b%y")
         except: pass
 
-    # 7. Analyst Initials and Name
     analyst_match = re.search(r"\(\s*([A-Z]{2,3})\s*\d+[a-z]{2}\s*Sample\)", text)
     if analyst_match: 
         st.session_state.analyst_initial = analyst_match.group(1).strip()
@@ -230,6 +222,80 @@ if st.session_state.active_platform == "ScanRDI":
     st.header("5. Automated Summaries")
     h1, h2 = st.columns(2)
     with h1:
-        try: curr_val = int(st.session_state.incidence_count)
-        except: curr_val = 0
-        st.session_state.incidence_count = st.number_input("Number of Prior Failures", value=curr_
+        # Validates that incidence_count is an integer to prevent ValueError
+        try: 
+            curr_val = int(st.session_state.incidence_count)
+        except: 
+            curr_val = 0
+        st.session_state.incidence_count = st.number_input("Number of Prior Failures", value=curr_val, min_value=0, step=1)
+    with h2:
+        st.session_state.oos_refs = st.text_input("Related OOS IDs (e.g. OOS-25001, OOS-25002)", st.session_state.oos_refs)
+
+    if st.button("🪄 Auto-Generate All"):
+        # 1. Equipment Summary
+        st.session_state.equipment_summary = f"Sample processing was conducted within the ISO 5 BSC in the {p_loc} (Suite {p_suite}{p_suffix}, BSC E00{st.session_state.bsc_id}) by {st.session_state.analyst_name}, and the changeover step was conducted within the ISO 5 BSC in the {c_loc} (Suite {c_suite}{c_suffix}, BSC E00{st.session_state.chgbsc_id}) by {st.session_state.changeover_name}."
+        
+        # 2. History Logic
+        if st.session_state.incidence_count == 0:
+            st.session_state.sample_history = "no prior failures"
+        elif st.session_state.incidence_count == 1:
+            st.session_state.sample_history = f"1 incident ({st.session_state.oos_refs})"
+        else:
+            st.session_state.sample_history = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
+
+        # 3. Narrative/EM Logic
+        growth_sources = []
+        if st.session_state.obs_pers.strip(): growth_sources.append(("Personnel Sampling", st.session_state.obs_pers, st.session_state.etx_pers, st.session_state.id_pers))
+        if st.session_state.obs_surf.strip(): growth_sources.append(("Surface Sampling", st.session_state.obs_surf, st.session_state.etx_surf, st.session_state.id_surf))
+        if st.session_state.obs_sett.strip(): growth_sources.append(("Settling Plates", st.session_state.obs_sett, st.session_state.etx_sett, st.session_state.id_sett))
+        if st.session_state.obs_air.strip(): growth_sources.append(("Weekly Active Air Sampling", st.session_state.obs_air, st.session_state.etx_air_weekly, st.session_state.id_air_weekly))
+        if st.session_state.obs_room.strip(): growth_sources.append(("surface sampling of cleanroom during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room_weekly, st.session_state.id_room_weekly))
+
+        if not growth_sources:
+            st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, or settling plates. Weekly active air sampling and weekly surface sampling showed no microbial growth."
+            st.session_state.em_details = ""
+        else:
+            em_clean = [p for p, obs in [("personal sampling (left touch and right touch)", st.session_state.obs_pers), ("surface sampling", st.session_state.obs_surf), ("settling plates", st.session_state.obs_sett)] if not obs.strip()]
+            wk_clean = [p for p, obs in [("weekly active air sampling", st.session_state.obs_air), ("weekly surface sampling", st.session_state.obs_room)] if not obs.strip()]
+            summary_text = "Upon analyzing the environmental monitoring results, "
+            if em_clean:
+                summary_text += "no microbial growth was observed in " + ", ".join(em_clean[:-1]) + (", and " if len(em_clean) > 1 else "") + em_clean[-1] + ". "
+            else: summary_text += "microbial growth was observed during the testing period. "
+            if wk_clean: summary_text += "Additionally, " + " and ".join(wk_clean) + " showed no microbial growth."
+            st.session_state.narrative_summary = summary_text
+
+            details_list = []
+            for category, obs, etx, org_id in growth_sources:
+                is_sing = ("1" in obs and "CFU" in obs.upper() and "11" not in obs and "21" not in obs)
+                growth_term, plate_term = ("growth was", "plate was") if is_sing else ("growths were", "plates were")
+                id_label = "sample IDs" if ("," in etx or "AND" in etx.upper()) else "sample ID"
+                org_verb = "organisms identified included" if ("," in org_id or "AND" in org_id.upper()) else "organism identified was"
+                details_list.append(f"However, microbial {growth_term} observed in {category} the week of testing. Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} {etx}. The {org_verb} {org_id}.")
+            st.session_state.em_details = "\n\n".join(details_list)
+        st.rerun()
+
+    st.session_state.sample_history = st.text_area("Sample History Fragment (Editable)", value=st.session_state.sample_history, height=70)
+    st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=120)
+    st.session_state.em_details = st.text_area("EM Growth Details (Editable)", value=st.session_state.em_details, height=150)
+
+# --- FINAL GENERATION ---
+if st.button("🚀 GENERATE FINAL REPORT"):
+    template_name = f"{st.session_state.active_platform} OOS template.docx"
+    if os.path.exists(template_name):
+        doc = DocxTemplate(template_name)
+        final_data = {k: v for k, v in st.session_state.items()}
+        final_data["oos_full"] = f"OOS-{st.session_state.oos_id}"
+        # Names are already synced in session state
+        
+        for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
+            if not final_data[key].strip(): final_data[key] = "No Growth"
+        try:
+            dt_obj = datetime.strptime(st.session_state.test_date, "%d%b%y")
+            final_data["date_before_test"] = (dt_obj - timedelta(days=1)).strftime("%d%b%y")
+            final_data["date_after_test"] = (dt_obj + timedelta(days=1)).strftime("%d%b%y")
+        except: pass
+        doc.render(final_data)
+        out_name = f"OOS-{st.session_state.oos_id} {st.session_state.client_name} ({st.session_state.sample_id}) - {st.session_state.active_platform}.docx"
+        doc.save(out_name)
+        with open(out_name, "rb") as f:
+            st.download_button("📂 Download Document", f, file_name=out_name)
