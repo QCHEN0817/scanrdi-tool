@@ -340,98 +340,92 @@ if st.session_state.active_platform == "ScanRDI":
     st.session_state.narrative_summary = narr_txt
     st.session_state.em_details = em_txt
 
-    # --- SECTION 4: EM OBSERVATIONS & TEXTS ---
+    # --- SECTION 4: EM OBSERVATIONS ---
     st.header("4. EM Observations")
-    col_em_inputs, col_em_texts = st.columns([1.5, 1])
     
-    with col_em_inputs:
-        st.subheader("Daily EM")
-        e1, e2, e3 = st.columns(3)
-        with e1:
-            st.session_state.obs_pers = st.text_input("Personnel Obs", st.session_state.obs_pers)
-            st.session_state.etx_pers = st.text_input("Pers ETX #", st.session_state.etx_pers)
-            st.session_state.id_pers = st.text_input("Pers ID", st.session_state.id_pers)
-        with e2:
-            st.session_state.obs_surf = st.text_input("Surface Obs", st.session_state.obs_surf)
-            st.session_state.etx_surf = st.text_input("Surf ETX #", st.session_state.etx_surf)
-            st.session_state.id_surf = st.text_input("Surf ID", st.session_state.id_surf)
-        with e3:
-            st.session_state.obs_sett = st.text_input("Settling Obs", st.session_state.obs_sett)
-            st.session_state.etx_sett = st.text_input("Sett ETX #", st.session_state.etx_sett)
-            st.session_state.id_sett = st.text_input("Sett ID", st.session_state.id_sett)
-        
-        st.subheader("Weekly Bracketing")
-        w1, w2 = st.columns(2)
-        with w1:
-            st.session_state.obs_air = st.text_input("Weekly Air Obs", st.session_state.obs_air)
-            st.session_state.etx_air_weekly = st.text_input("Weekly Air ETX #", st.session_state.etx_air_weekly)
-            st.session_state.id_air_weekly = st.text_input("Weekly Air ID", st.session_state.id_air_weekly)
-            st.session_state.weekly_init = st.text_input("Weekly Monitor Initials", st.session_state.weekly_init)
-        with w2:
-            st.session_state.obs_room = st.text_input("Weekly Surf Obs", st.session_state.obs_room)
-            st.session_state.etx_room_weekly = st.text_input("Weekly Surf ETX #", st.session_state.etx_room_weekly)
-            st.session_state.id_room_wk_of = st.text_input("Weekly Surf ID", st.session_state.id_room_wk_of)
-            st.session_state.date_weekly = st.text_input("Date of Weekly Monitoring", st.session_state.date_weekly)
+    # INPUTS
+    e1, e2, e3 = st.columns(3)
+    with e1:
+        st.session_state.obs_pers = st.text_input("Personnel Obs", st.session_state.obs_pers)
+        st.session_state.etx_pers = st.text_input("Pers ETX #", st.session_state.etx_pers)
+        st.session_state.id_pers = st.text_input("Pers ID", st.session_state.id_pers)
+    with e2:
+        st.session_state.obs_surf = st.text_input("Surface Obs", st.session_state.obs_surf)
+        st.session_state.etx_surf = st.text_input("Surf ETX #", st.session_state.etx_surf)
+        st.session_state.id_surf = st.text_input("Surf ID", st.session_state.id_surf)
+    with e3:
+        st.session_state.obs_sett = st.text_input("Settling Obs", st.session_state.obs_sett)
+        st.session_state.etx_sett = st.text_input("Sett ETX #", st.session_state.etx_sett)
+        st.session_state.id_sett = st.text_input("Sett ID", st.session_state.id_sett)
+    
+    st.caption("Weekly Bracketing")
+    w1, w2 = st.columns(2)
+    with w1:
+        st.session_state.obs_air = st.text_input("Weekly Air Obs", st.session_state.obs_air)
+        st.session_state.etx_air_weekly = st.text_input("Weekly Air ETX #", st.session_state.etx_air_weekly)
+        st.session_state.id_air_weekly = st.text_input("Weekly Air ID", st.session_state.id_air_weekly)
+        st.session_state.weekly_init = st.text_input("Weekly Monitor Initials", st.session_state.weekly_init)
+    with w2:
+        st.session_state.obs_room = st.text_input("Weekly Surf Obs", st.session_state.obs_room)
+        st.session_state.etx_room_weekly = st.text_input("Weekly Surf ETX #", st.session_state.etx_room_weekly)
+        st.session_state.id_room_wk_of = st.text_input("Weekly Surf ID", st.session_state.id_room_wk_of)
+        st.session_state.date_weekly = st.text_input("Date of Weekly Monitoring", st.session_state.date_weekly)
 
-    with col_em_texts:
-        st.subheader("Generated Narrative & Details (Editable)")
-        st.session_state.narrative_summary = st.text_area("Narrative Summary", value=narr_txt, height=150, disabled=False, key="narr_editable")
-        st.session_state.em_details = st.text_area("EM Details", value=em_txt, height=250, disabled=False, key="em_editable")
+    st.divider()
+    
+    # EDITABLE TEXT AREAS (Stacked Below Inputs)
+    st.subheader("Generated EM Summary & Details (Editable)")
+    st.session_state.narrative_summary = st.text_area("Narrative Summary", value=narr_txt, height=120, disabled=False, key="narr_editable")
+    st.session_state.em_details = st.text_area("EM Details", value=em_txt, height=200, disabled=False, key="em_editable")
 
-    # --- SECTION 5: LIVE SIDE-BY-SIDE ---
+    # --- SECTION 5 ---
     st.header("5. Automated Summaries & Analysis")
     
-    # 1. History
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("Sample History")
-        st.session_state.has_prior_failures = st.radio("Were there any prior failures in the last 6 months?", ["No", "Yes"], index=0 if st.session_state.has_prior_failures == "No" else 1, horizontal=True)
-        if st.session_state.has_prior_failures == "Yes":
-            try: curr_val = int(st.session_state.incidence_count)
-            except: curr_val = 0
-            safe_val = max(1, curr_val)
-            st.session_state.incidence_count = st.number_input("Number of Prior Failures", value=safe_val, min_value=1, step=1)
-            st.session_state.oos_refs = st.text_input("Related OOS IDs (e.g. OOS-25001, OOS-25002)", st.session_state.oos_refs)
-        else:
-            st.session_state.incidence_count = 0
-            st.session_state.oos_refs = ""
-    with c2:
-        st.subheader("Generated History Text (Editable)")
-        st.session_state.sample_history_paragraph = st.text_area("History Text", value=hist_txt, height=150, disabled=False, key="hist_editable")
+    # History
+    st.subheader("Sample History")
+    st.session_state.has_prior_failures = st.radio("Were there any prior failures in the last 6 months?", ["No", "Yes"], index=0 if st.session_state.has_prior_failures == "No" else 1, horizontal=True)
+    if st.session_state.has_prior_failures == "Yes":
+        try: curr_val = int(st.session_state.incidence_count)
+        except: curr_val = 0
+        safe_val = max(1, curr_val)
+        st.session_state.incidence_count = st.number_input("Number of Prior Failures", value=safe_val, min_value=1, step=1)
+        st.session_state.oos_refs = st.text_input("Related OOS IDs (e.g. OOS-25001, OOS-25002)", st.session_state.oos_refs)
+    else:
+        st.session_state.incidence_count = 0
+        st.session_state.oos_refs = ""
+        
+    st.session_state.sample_history_paragraph = st.text_area("History Text (Editable)", value=hist_txt, height=120, disabled=False, key="hist_editable")
 
     st.divider()
 
-    # 2. Cross Contam
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("Cross-Contamination Analysis")
-        st.session_state.other_positives = st.radio("Did other samples test positive on the same day?", ["No", "Yes"], index=0 if st.session_state.other_positives == "No" else 1, horizontal=True)
-        if st.session_state.other_positives == "Yes":
-            try: count_val = int(st.session_state.total_pos_count_num)
-            except: count_val = 2
-            safe_count = max(2, count_val)
-            st.session_state.total_pos_count_num = st.number_input("Total # of Positive Samples that day", min_value=2, value=safe_count, step=1)
-            
-            try: cur_order_val = int(st.session_state.current_pos_order)
-            except: cur_order_val = 1
-            st.session_state.current_pos_order = st.number_input(f"Order of THIS Sample ({st.session_state.sample_id})", value=max(1, cur_order_val), step=1)
-            
-            num_others = st.session_state.total_pos_count_num - 1
-            st.caption(f"Details for {num_others} other positive(s):")
-            for i in range(num_others):
-                sub_c1, sub_c2 = st.columns(2)
-                with sub_c1:
-                    key_id = f"other_id_{i}"
-                    if key_id not in st.session_state: st.session_state[key_id] = ""
-                    st.session_state[key_id] = st.text_input(f"Other Sample #{i+1} ID", key=f"input_id_{i}", value=st.session_state[key_id])
-                with sub_c2:
-                    key_order = f"other_order_{i}"
-                    try: saved_order = int(st.session_state.get(key_order, 1))
-                    except: saved_order = 1
-                    st.session_state[key_order] = st.number_input(f"Other Sample #{i+1} Order", key=f"input_order_{i}", value=max(1, saved_order), step=1)
-    with c2:
-        st.subheader("Generated Cross-Contam Text (Editable)")
-        st.session_state.cross_contamination_summary = st.text_area("Cross-Contam Text", value=cc_txt, height=350, disabled=False, key="cc_editable")
+    # Cross Contam
+    st.subheader("Cross-Contamination Analysis")
+    st.session_state.other_positives = st.radio("Did other samples test positive on the same day?", ["No", "Yes"], index=0 if st.session_state.other_positives == "No" else 1, horizontal=True)
+    if st.session_state.other_positives == "Yes":
+        try: count_val = int(st.session_state.total_pos_count_num)
+        except: count_val = 2
+        safe_count = max(2, count_val)
+        st.session_state.total_pos_count_num = st.number_input("Total # of Positive Samples that day", min_value=2, value=safe_count, step=1)
+        
+        try: cur_order_val = int(st.session_state.current_pos_order)
+        except: cur_order_val = 1
+        st.session_state.current_pos_order = st.number_input(f"Order of THIS Sample ({st.session_state.sample_id})", value=max(1, cur_order_val), step=1)
+        
+        num_others = st.session_state.total_pos_count_num - 1
+        st.caption(f"Details for {num_others} other positive(s):")
+        for i in range(num_others):
+            sub_c1, sub_c2 = st.columns(2)
+            with sub_c1:
+                key_id = f"other_id_{i}"
+                if key_id not in st.session_state: st.session_state[key_id] = ""
+                st.session_state[key_id] = st.text_input(f"Other Sample #{i+1} ID", key=f"input_id_{i}", value=st.session_state[key_id])
+            with sub_c2:
+                key_order = f"other_order_{i}"
+                try: saved_order = int(st.session_state.get(key_order, 1))
+                except: saved_order = 1
+                st.session_state[key_order] = st.number_input(f"Other Sample #{i+1} Order", key=f"input_order_{i}", value=max(1, saved_order), step=1)
+    
+    st.session_state.cross_contamination_summary = st.text_area("Cross-Contam Text (Editable)", value=cc_txt, height=250, disabled=False, key="cc_editable")
 
     save_current_state()
 
@@ -483,7 +477,7 @@ if st.button("🚀 GENERATE FINAL REPORT"):
             
             final_data["obs_air_wk_of"] = st.session_state.obs_air
             final_data["etx_air_wk_of"] = st.session_state.etx_air_weekly
-            final_data["id_air_wk_of"] = st.session_state.id_air_weekly
+            final_data["id_air_wk_of"] = st.session_state.id_air_wk_of
             
             final_data["obs_room_wk_of"] = st.session_state.obs_room
             final_data["etx_room_wk_of"] = st.session_state.etx_room_weekly
