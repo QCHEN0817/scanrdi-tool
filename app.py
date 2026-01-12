@@ -37,7 +37,7 @@ def save_current_state():
     try:
         with open(STATE_FILE, "w") as f:
             json.dump(data_to_save, f)
-        st.toast("✅ Progress saved!", icon="💾")
+        # Optional: st.toast("✅ Progress saved!", icon="💾")
     except Exception as e:
         st.error(f"Could not save state: {e}")
 
@@ -67,14 +67,12 @@ def get_room_logic(bsc_id):
     except: 
         suffix, location = "B", "innermost ISO 7 room"
     
-    # Map BSC to Suite
     if bsc_id in ["1310", "1309"]: suite = "117"
     elif bsc_id in ["1311", "1312"]: suite = "116"
     elif bsc_id in ["1314", "1313"]: suite = "115"
     elif bsc_id in ["1316", "1798"]: suite = "114"
     else: suite = "Unknown"
     
-    # Map Suite to Room ID
     room_map = {"117": "1739", "116": "1738", "115": "1737", "114": "1736"}
     room_id = room_map.get(suite, "Unknown")
     
@@ -97,7 +95,7 @@ field_keys = [
     "org_choice", "manual_org", "test_record", "control_pos", "control_lot", 
     "control_exp", "obs_pers", "etx_pers", "id_pers", "obs_surf", "etx_surf", 
     "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air_weekly", 
-    "id_air_weekly", "obs_room", "etx_room_weekly", "id_room_weekly", "weekly_init", 
+    "id_air_weekly", "obs_room", "etx_room_weekly", "id_room_wk_of", "weekly_init", 
     "date_weekly", "equipment_summary", "narrative_summary", "em_details", 
     "sample_history_paragraph", "incidence_count", "oos_refs",
     "other_positives", "cross_contamination_summary",
@@ -280,21 +278,24 @@ if st.session_state.active_platform == "ScanRDI":
     with wk2:
         st.session_state.obs_room = st.text_input("Weekly Surf Obs", st.session_state.obs_room)
         st.session_state.etx_room_weekly = st.text_input("Weekly Surf ETX #", st.session_state.etx_room_weekly)
-        st.session_state.id_room_weekly = st.text_input("Weekly Surf ID", st.session_state.id_room_weekly)
+        st.session_state.id_room_wk_of = st.text_input("Weekly Surf ID", st.session_state.id_room_wk_of)
         st.session_state.date_weekly = st.text_input("Date of Weekly Monitoring", st.session_state.date_weekly)
 
     st.header("5. Automated Summaries")
     h1, h2 = st.columns(2)
     with h1:
-        # --- SMART YES/NO LOGIC FOR HISTORY ---
+        # --- SMART YES/NO LOGIC FOR HISTORY (CRASH FIXED) ---
         st.session_state.has_prior_failures = st.radio("Were there any prior failures in the last 6 months?", ["No", "Yes"], index=0 if st.session_state.has_prior_failures == "No" else 1, horizontal=True)
         
         if st.session_state.has_prior_failures == "Yes":
             try: curr_val = int(st.session_state.incidence_count)
             except: curr_val = 0
-            st.session_state.incidence_count = st.number_input("Number of Prior Failures", value=curr_val, min_value=1, step=1)
+            # FIX: Ensure value is at least 1 to match min_value
+            safe_val = max(1, curr_val)
+            st.session_state.incidence_count = st.number_input("Number of Prior Failures", value=safe_val, min_value=1, step=1)
             st.session_state.oos_refs = st.text_input("Related OOS IDs (e.g. OOS-25001, OOS-25002)", st.session_state.oos_refs)
         else:
+            # Auto-reset if No
             st.session_state.incidence_count = 0
             st.session_state.oos_refs = ""
         
@@ -414,7 +415,7 @@ if st.session_state.active_platform == "ScanRDI":
             ("surface sampling", st.session_state.obs_surf, st.session_state.etx_surf, st.session_state.id_surf, "on the date of testing"),
             ("settling plates", st.session_state.obs_sett, st.session_state.etx_sett, st.session_state.id_sett, "on the date of testing"),
             ("weekly active air sampling", st.session_state.obs_air, st.session_state.etx_air_weekly, st.session_state.id_air_weekly, "the week of testing"),
-            ("surface sampling of cleanroom during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room_weekly, st.session_state.id_room_weekly, "the week of testing")
+            ("surface sampling of cleanroom during weekly room surface sampling", st.session_state.obs_room, st.session_state.etx_room_weekly, st.session_state.id_room_wk_of, "the week of testing")
         ]
 
         details_list = []
