@@ -30,18 +30,30 @@ def get_full_name(initials):
     return lookup.get(initials.upper().strip(), "")
 
 def get_room_logic(bsc_id):
+    # Returns: room_id (cr_id), suite (cr_suit), suffix (A/B), location description
     try:
         num = int(bsc_id)
         suffix = "B" if num % 2 == 0 else "A"
         location = "innermost ISO 7 room" if suffix == "B" else "middle ISO 7 buffer room"
     except: suffix, location = "B", "innermost ISO 7 room"
     
-    if bsc_id in ["1310", "1309"]: room, suite = "117", "117"
-    elif bsc_id in ["1311", "1312"]: room, suite = "116", "116"
-    elif bsc_id in ["1314", "1313"]: room, suite = "115", "115"
-    elif bsc_id in ["1316", "1798"]: room, suite = "114", "114"
-    else: room, suite = "Unknown", "Unknown"
-    return room, suite, suffix, location
+    # 1. Map BSC ID to Suite
+    if bsc_id in ["1310", "1309"]: suite = "117"
+    elif bsc_id in ["1311", "1312"]: suite = "116"
+    elif bsc_id in ["1314", "1313"]: suite = "115"
+    elif bsc_id in ["1316", "1798"]: suite = "114"
+    else: suite = "Unknown"
+    
+    # 2. Map Suite to Room ID (cr_id) based on user rule
+    room_map = {
+        "117": "1739",
+        "116": "1738",
+        "115": "1737",
+        "114": "1736"
+    }
+    room_id = room_map.get(suite, "Unknown")
+    
+    return room_id, suite, suffix, location
 
 # --- SESSION STATE INITIALIZATION ---
 def init_state(key, default_value=""):
@@ -169,11 +181,11 @@ if st.session_state.active_platform == "ScanRDI":
     with e1:
         st.session_state.bsc_id = st.selectbox("Select Processing BSC ID", bsc_list, index=bsc_list.index(st.session_state.bsc_id) if st.session_state.bsc_id in bsc_list else 0)
         p_room, p_suite, p_suffix, p_loc = get_room_logic(st.session_state.bsc_id)
-        st.caption(f"Processor: Suite {p_suite}{p_suffix} ({p_loc})")
+        st.caption(f"Processor: Suite {p_suite}{p_suffix} ({p_loc}) [Room ID: {p_room}]")
     with e2:
         st.session_state.chgbsc_id = st.selectbox("Select Changeover BSC ID", bsc_list, index=bsc_list.index(st.session_state.chgbsc_id) if st.session_state.chgbsc_id in bsc_list else 0)
         c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
-        st.caption(f"Changeover: Suite {c_suite}{c_suffix} ({c_loc})")
+        st.caption(f"Changeover: Suite {c_suite}{c_suffix} ({c_loc}) [Room ID: {c_room}]")
 
     st.header("3. Findings & EM Data")
     f1, f2 = st.columns(2)
@@ -295,10 +307,11 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         final_data = {k: v for k, v in st.session_state.items()}
         final_data["oos_full"] = f"OOS-{st.session_state.oos_id}"
         
-        # --- FIXED: Explicitly map cr_suit for the template ---
+        # --- FIXED: Explicitly map cr_suit AND cr_id for the template ---
         if st.session_state.active_platform == "ScanRDI":
-            _, suite_num, _, _ = get_room_logic(st.session_state.bsc_id)
+            room_num, suite_num, _, _ = get_room_logic(st.session_state.bsc_id)
             final_data["cr_suit"] = suite_num
+            final_data["cr_id"] = room_num  # Explicitly added mapping for {{ cr_id }}
 
         for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
             if not final_data[key].strip(): final_data[key] = "No Growth"
