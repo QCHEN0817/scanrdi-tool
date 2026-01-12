@@ -19,6 +19,31 @@ st.markdown("""
 # --- FILE PERSISTENCE (MEMORY) ---
 STATE_FILE = "investigation_state.json"
 
+# Define keys to save. We include slots for up to 10 dynamic "other" samples to ensure saving works.
+field_keys = [
+    "oos_id", "client_name", "sample_id", "test_date", "sample_name", "lot_number", 
+    "dosage_form", "monthly_cleaning_date", 
+    "prepper_initial", "prepper_name", 
+    "analyst_initial", "analyst_name",
+    "changeover_initial", "changeover_name",
+    "reader_initial", "reader_name",
+    "bsc_id", "chgbsc_id", "scan_id", 
+    "shift_number", "active_platform",
+    "org_choice", "manual_org", "test_record", "control_pos", "control_lot", 
+    "control_exp", "obs_pers", "etx_pers", "id_pers", "obs_surf", "etx_surf", 
+    "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air_weekly", 
+    "id_air_weekly", "obs_room", "etx_room_weekly", "id_room_wk_of", "weekly_init", 
+    "date_weekly", "equipment_summary", "narrative_summary", "em_details", 
+    "sample_history_paragraph", "incidence_count", "oos_refs",
+    "other_positives", "cross_contamination_summary",
+    "total_pos_count_num", "current_pos_order",
+    "diff_changeover_bsc", "has_prior_failures"
+]
+# Add dynamic keys for up to 10 other samples
+for i in range(10):
+    field_keys.append(f"other_id_{i}")
+    field_keys.append(f"other_order_{i}")
+
 def load_saved_state():
     """Loads saved inputs from the JSON file if it exists."""
     if os.path.exists(STATE_FILE):
@@ -37,8 +62,6 @@ def save_current_state():
     try:
         with open(STATE_FILE, "w") as f:
             json.dump(data_to_save, f)
-        # Optional toast disabled to prevent spamming
-        # st.toast("✅ Progress saved!", icon="💾")
     except Exception as e:
         st.error(f"Could not save state: {e}")
 
@@ -55,6 +78,11 @@ def get_full_name(initials):
         "GL": "Guanchen Li", "QYC": "Qiyue Chen"
     }
     return lookup.get(initials.upper().strip(), "")
+
+def num_to_words(n):
+    """Simple number to word converter."""
+    mapping = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+    return mapping.get(n, str(n))
 
 def get_room_logic(bsc_id):
     try:
@@ -84,33 +112,13 @@ def init_state(key, default_value=""):
     if key not in st.session_state:
         st.session_state[key] = default_value
 
-field_keys = [
-    "oos_id", "client_name", "sample_id", "test_date", "sample_name", "lot_number", 
-    "dosage_form", "monthly_cleaning_date", 
-    "prepper_initial", "prepper_name", 
-    "analyst_initial", "analyst_name",
-    "changeover_initial", "changeover_name",
-    "reader_initial", "reader_name",
-    "bsc_id", "chgbsc_id", "scan_id", 
-    "shift_number", "active_platform",
-    "org_choice", "manual_org", "test_record", "control_pos", "control_lot", 
-    "control_exp", "obs_pers", "etx_pers", "id_pers", "obs_surf", "etx_surf", 
-    "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air_weekly", 
-    "id_air_weekly", "obs_room", "etx_room_weekly", "id_room_wk_of", "weekly_init", 
-    "date_weekly", "equipment_summary", "narrative_summary", "em_details", 
-    "sample_history_paragraph", "incidence_count", "oos_refs",
-    "other_positives", "cross_contamination_summary",
-    "other_positives_ids", "other_positives_orders", "postive_order", "positive_count", # Updated keys
-    "diff_changeover_bsc", "has_prior_failures"
-]
-
 for k in field_keys:
     if k == "incidence_count": init_state(k, 0)
     elif k == "shift_number": init_state(k, "1")
     elif "etx" in k or "id" in k: init_state(k, "N/A")
     elif k == "active_platform": init_state(k, "ScanRDI")
     elif k == "other_positives": init_state(k, "No")
-    elif k == "positive_count": init_state(k, "two")
+    elif k == "total_pos_count_num": init_state(k, 2)
     elif k == "diff_changeover_bsc": init_state(k, "No")
     elif k == "has_prior_failures": init_state(k, "No")
     else: init_state(k, "")
@@ -219,7 +227,6 @@ if st.session_state.active_platform == "ScanRDI":
         st.caption(f"Processor: Suite {p_suite}{p_suffix} ({p_loc}) [Room ID: {p_room}]")
     
     with e2:
-        # --- SMART YES/NO LOGIC FOR BSC ---
         st.session_state.diff_changeover_bsc = st.radio("Was the Changeover performed in a different BSC?", ["No", "Yes"], index=0 if st.session_state.diff_changeover_bsc == "No" else 1, horizontal=True)
         
         if st.session_state.diff_changeover_bsc == "Yes":
@@ -227,7 +234,6 @@ if st.session_state.active_platform == "ScanRDI":
             c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
             st.caption(f"Changeover: Suite {c_suite}{c_suffix} ({c_loc}) [Room ID: {c_room}]")
         else:
-            # Auto-set Changeover BSC to be same as Processing BSC
             st.session_state.chgbsc_id = st.session_state.bsc_id
             c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
             st.info(f"Changeover BSC set to {st.session_state.bsc_id} (Same as Processing)")
@@ -285,38 +291,53 @@ if st.session_state.active_platform == "ScanRDI":
     st.header("5. Automated Summaries")
     h1, h2 = st.columns(2)
     with h1:
-        # --- SMART YES/NO LOGIC FOR HISTORY (CRASH FIXED) ---
+        # History Logic
         st.session_state.has_prior_failures = st.radio("Were there any prior failures in the last 6 months?", ["No", "Yes"], index=0 if st.session_state.has_prior_failures == "No" else 1, horizontal=True)
-        
         if st.session_state.has_prior_failures == "Yes":
             try: curr_val = int(st.session_state.incidence_count)
             except: curr_val = 0
-            # FIX: Ensure value is at least 1 to match min_value
-            safe_val = max(1, curr_val)
+            safe_val = max(1, curr_val) # Prevent min_value crash
             st.session_state.incidence_count = st.number_input("Number of Prior Failures", value=safe_val, min_value=1, step=1)
             st.session_state.oos_refs = st.text_input("Related OOS IDs (e.g. OOS-25001, OOS-25002)", st.session_state.oos_refs)
         else:
-            # Auto-reset if No
             st.session_state.incidence_count = 0
             st.session_state.oos_refs = ""
         
         st.divider()
+        
+        # --- NEW DYNAMIC CROSS-CONTAMINATION ---
         st.session_state.other_positives = st.radio("Did other samples test positive on the same day?", ["No", "Yes"], index=0 if st.session_state.other_positives == "No" else 1, horizontal=True)
         
         if st.session_state.other_positives == "Yes":
-            st.session_state.other_positives_ids = st.text_input("Other Positive Sample ID(s) (e.g. ETX-123, ETX-456)", st.session_state.other_positives_ids)
-            c1, c2 = st.columns(2)
-            with c1:
-                st.session_state.other_positives_orders = st.text_input("Order of OTHER sample(s) (e.g. 1st, 2nd)", st.session_state.other_positives_orders)
-                st.session_state.positive_count = st.text_input("Total Positive Count (word)", value=st.session_state.positive_count)
-            with c2:
-                st.session_state.postive_order = st.text_input("Order of CURRENT sample (e.g. 10th)", st.session_state.postive_order)
+            # 1. Total Count Input
+            try: count_val = int(st.session_state.total_pos_count_num)
+            except: count_val = 2
+            safe_count = max(2, count_val) # Must be at least 2 (Current + 1 Other)
+            st.session_state.total_pos_count_num = st.number_input("Total # of Positive Samples that day (Including this one)", min_value=2, value=safe_count, step=1)
+            
+            # 2. Current Sample Order
+            st.session_state.current_pos_order = st.text_input(f"Processing Order of THIS Sample ({st.session_state.sample_id})", placeholder="e.g. 5th")
+            
+            # 3. Dynamic Loop for OTHER samples
+            num_others = st.session_state.total_pos_count_num - 1
+            st.caption(f"Please enter details for the **{num_others}** other positive sample(s):")
+            
+            for i in range(num_others):
+                c1, c2 = st.columns(2)
+                with c1:
+                    key_id = f"other_id_{i}"
+                    if key_id not in st.session_state: st.session_state[key_id] = ""
+                    st.session_state[key_id] = st.text_input(f"Other Sample #{i+1} ID", key=f"input_id_{i}", value=st.session_state[key_id])
+                with c2:
+                    key_order = f"other_order_{i}"
+                    if key_order not in st.session_state: st.session_state[key_order] = ""
+                    st.session_state[key_order] = st.text_input(f"Other Sample #{i+1} Order", key=f"input_order_{i}", value=st.session_state[key_order], placeholder="e.g. 1st")
 
     with h2:
         st.text_area("Narrative Summary (Preview)", st.session_state.narrative_summary, height=100, disabled=True)
 
     if st.button("🪄 Auto-Generate All"):
-        # --- 1. EQUIPMENT SUMMARY LOGIC ---
+        # --- 1. EQUIPMENT SUMMARY ---
         t_room, t_suite, t_suffix, t_loc = get_room_logic(st.session_state.bsc_id)
         c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
         
@@ -360,7 +381,7 @@ if st.session_state.active_platform == "ScanRDI":
                      f"by {st.session_state.changeover_name} on {st.session_state.test_date}.")
             st.session_state.equipment_summary = f"{part1}\n\n{part2}\n\n{part3}"
 
-        # --- 2. SAMPLE HISTORY LOGIC ---
+        # --- 2. SAMPLE HISTORY ---
         if st.session_state.incidence_count == 0:
             hist_phrase = "no prior failures"
         elif st.session_state.incidence_count == 1:
@@ -369,21 +390,48 @@ if st.session_state.active_platform == "ScanRDI":
             hist_phrase = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
         st.session_state.sample_history_paragraph = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” has had {hist_phrase} using the Scan RDI method during this period."
 
-        # --- 3. CROSS-CONTAMINATION LOGIC (Multi-Sample Ready) ---
+        # --- 3. DYNAMIC CROSS-CONTAMINATION LOGIC ---
         if st.session_state.other_positives == "No":
             st.session_state.cross_contamination_summary = "All other samples processed by the analyst and other analysts that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
         else:
-            # Allows user to list multiple IDs (e.g. "ETX-123 and ETX-456")
+            # Gather all other samples
+            num_others = st.session_state.total_pos_count_num - 1
+            other_list_ids = []
+            detail_sentences = []
+            
+            for i in range(num_others):
+                oid = st.session_state.get(f"other_id_{i}", "")
+                oord = st.session_state.get(f"other_order_{i}", "")
+                if oid:
+                    other_list_ids.append(oid)
+                    if oord: detail_sentences.append(f"{oid} was the {oord} sample processed")
+            
+            # Construct the "List of IDs" part
+            all_ids = other_list_ids + [st.session_state.sample_id]
+            if len(all_ids) == 2:
+                ids_str = f"{all_ids[0]} and {all_ids[1]}"
+            else:
+                ids_str = ", ".join(all_ids[:-1]) + ", and " + all_ids[-1]
+            
+            count_word = num_to_words(st.session_state.total_pos_count_num)
+            
+            # Construct the "Details" part
+            current_detail = f"while {st.session_state.sample_id} was the {st.session_state.current_pos_order}"
+            if len(detail_sentences) == 1:
+                details_str = f"{detail_sentences[0]}, {current_detail}"
+            else:
+                details_str = ", ".join(detail_sentences) + f", {current_detail}"
+
             st.session_state.cross_contamination_summary = (
-                f"{st.session_state.other_positives_ids} and {st.session_state.sample_id} were the {st.session_state.positive_count} samples tested positive for microbial growth. "
+                f"{ids_str} were the {count_word} samples tested positive for microbial growth. "
                 f"The analyst confirmed that these samples were not processed concurrently, sequentially, or within the same manifold run. "
-                f"Specifically, {st.session_state.other_positives_ids} was processed as {st.session_state.other_positives_orders}, while {st.session_state.sample_id} was the {st.session_state.postive_order}. "
+                f"Specifically, {details_str}. "
                 f"The analyst also verified that gloves were thoroughly disinfected between samples. "
                 f"Furthermore, all other samples processed by the analyst that day tested negative. "
                 f"These findings suggest that cross-contamination between samples is highly unlikely."
             )
 
-        # --- 4. NARRATIVE LOGIC ---
+        # --- 4. NARRATIVE ---
         em_clean = []
         if not st.session_state.obs_pers.strip(): em_clean.append("personal sampling (left touch and right touch)")
         if not st.session_state.obs_surf.strip(): em_clean.append("surface sampling")
@@ -394,7 +442,6 @@ if st.session_state.active_platform == "ScanRDI":
         if not st.session_state.obs_room.strip(): wk_clean.append("weekly surface sampling")
 
         summary_text = "Upon analyzing the environmental monitoring results, "
-        
         if em_clean:
             if len(em_clean) == 1: clean_str = em_clean[0]
             elif len(em_clean) == 2: clean_str = f"{em_clean[0]} and {em_clean[1]}"
@@ -435,7 +482,7 @@ if st.session_state.active_platform == "ScanRDI":
         st.rerun()
 
     st.session_state.sample_history_paragraph = st.text_area("Sample History (Full Paragraph Editable)", value=st.session_state.sample_history_paragraph, height=100)
-    st.session_state.cross_contamination_summary = st.text_area("Cross-Contamination Summary (Editable)", value=st.session_state.cross_contamination_summary, height=100)
+    st.session_state.cross_contamination_summary = st.text_area("Cross-Contamination Summary (Editable)", value=st.session_state.cross_contamination_summary, height=150)
     st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=120)
     st.session_state.em_details = st.text_area("EM Growth Details (Editable)", value=st.session_state.em_details, height=150)
 
