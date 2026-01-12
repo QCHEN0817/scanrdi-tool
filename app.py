@@ -1,7 +1,25 @@
+You are absolutely right to ask this. By default, **Streamlit "forgets" everything** the moment you close the tab or refresh the page.
+
+To make it **"remember"** your inputs from the last time you used it, we need to save the data to a file (like a simple text or JSON file) on your computer.
+
+You **do not** need to manually add a file to GitHub. We can just add a few lines of code to your `app.py` that will automatically create a "save file" (let's call it `investigation_state.json`) whenever you use the tool.
+
+Here is the **Updated `app.py**` with a new **"Auto-Save & Load"** feature.
+
+### **What is new in this code?**
+
+1. **Auto-Load:** When you open the app, it checks if `investigation_state.json` exists. If it does, it fills in all the fields with your last used data.
+2. **Auto-Save:** Every time you click **"Generate Final Report"**, it saves your current inputs to that file.
+3. **Manual Save:** I added a small "💾 Save Current Inputs" button in the sidebar just in case you want to save your work without generating a report yet.
+
+### **Sterility Investigation Tool: Final Version (With Memory)**
+
+```python
 import streamlit as st
 from docxtpl import DocxTemplate
 import os
 import re
+import json
 from datetime import datetime, timedelta
 
 # --- PAGE CONFIG ---
@@ -14,6 +32,34 @@ st.markdown("""
     .main { background-color: #ffffff; }
     </style>
     """, unsafe_allow_html=True)
+
+# --- FILE PERSISTENCE (MEMORY) ---
+STATE_FILE = "investigation_state.json"
+
+def load_saved_state():
+    """Loads saved inputs from the JSON file if it exists."""
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, "r") as f:
+                saved_data = json.load(f)
+            # Update session state with saved data
+            for key, value in saved_data.items():
+                if key in st.session_state:
+                    st.session_state[key] = value
+            # st.toast("✅ Loaded previous session data!", icon="📂")
+        except Exception as e:
+            st.error(f"Could not load saved state: {e}")
+
+def save_current_state():
+    """Saves the current session state to a JSON file."""
+    # Filter only the keys we care about (exclude streamlit internal keys)
+    data_to_save = {k: v for k, v in st.session_state.items() if k in field_keys}
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump(data_to_save, f)
+        st.toast("✅ Progress saved!", icon="💾")
+    except Exception as e:
+        st.error(f"Could not save state: {e}")
 
 # --- HELPER FUNCTIONS ---
 def get_full_name(initials):
@@ -30,7 +76,6 @@ def get_full_name(initials):
     return lookup.get(initials.upper().strip(), "")
 
 def get_room_logic(bsc_id):
-    # Returns: room_id, suite, suffix (A/B), location_desc
     try:
         num = int(bsc_id)
         if num % 2 == 0:
@@ -42,14 +87,12 @@ def get_room_logic(bsc_id):
     except: 
         suffix, location = "B", "innermost ISO 7 room"
     
-    # Map BSC ID to Suite
     if bsc_id in ["1310", "1309"]: suite = "117"
     elif bsc_id in ["1311", "1312"]: suite = "116"
     elif bsc_id in ["1314", "1313"]: suite = "115"
     elif bsc_id in ["1316", "1798"]: suite = "114"
     else: suite = "Unknown"
     
-    # Map Suite to Room ID
     room_map = {"117": "1739", "116": "1738", "115": "1737", "114": "1736"}
     room_id = room_map.get(suite, "Unknown")
     
@@ -68,7 +111,7 @@ field_keys = [
     "changeover_initial", "changeover_name",
     "reader_initial", "reader_name",
     "bsc_id", "chgbsc_id", "scan_id", 
-    "shift_number",
+    "shift_number", "active_platform",
     "org_choice", "manual_org", "test_record", "control_pos", "control_lot", 
     "control_exp", "obs_pers", "etx_pers", "id_pers", "obs_surf", "etx_surf", 
     "id_surf", "obs_sett", "etx_sett", "id_sett", "obs_air", "etx_air_weekly", 
@@ -81,7 +124,13 @@ for k in field_keys:
     if k == "incidence_count": init_state(k, 0)
     elif k == "shift_number": init_state(k, "1")
     elif "etx" in k or "id" in k: init_state(k, "N/A")
+    elif k == "active_platform": init_state(k, "ScanRDI")
     else: init_state(k, "")
+
+# LOAD DATA ON APP START
+if "data_loaded" not in st.session_state:
+    load_saved_state()
+    st.session_state.data_loaded = True
 
 # --- EMAIL PARSER LOGIC ---
 def parse_email_text(text):
@@ -111,16 +160,22 @@ def parse_email_text(text):
     if analyst_match: 
         st.session_state.analyst_initial = analyst_match.group(1).strip()
         st.session_state.analyst_name = get_full_name(st.session_state.analyst_initial)
+    
+    # Auto-save after parsing
+    save_current_state()
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("Sterility Platforms")
-    if "active_platform" not in st.session_state:
-        st.session_state.active_platform = "ScanRDI"
     if st.button("ScanRDI"): st.session_state.active_platform = "ScanRDI"
     if st.button("Celsis"): st.session_state.active_platform = "Celsis"
     if st.button("USP 71"): st.session_state.active_platform = "USP 71"
     st.divider()
+    
+    # NEW: Manual Save Button
+    if st.button("💾 Save Current Inputs"):
+        save_current_state()
+        
     st.success(f"Active: {st.session_state.active_platform}")
 
 st.title(f"Sterility Investigation & Reporting: {st.session_state.active_platform}")
@@ -248,7 +303,6 @@ if st.session_state.active_platform == "ScanRDI":
         c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
         
         if st.session_state.bsc_id == st.session_state.chgbsc_id:
-            # Single BSC Scenario
             st.session_state.equipment_summary = (
                 f"The cleanroom used for testing and changeover procedures (Suite {t_suite}) comprises three interconnected sections: "
                 f"the innermost ISO 7 cleanroom ({t_suite}B), which connects to the middle ISO 7 buffer room ({t_suite}A), "
@@ -261,7 +315,6 @@ if st.session_state.active_platform == "ScanRDI":
                 f"(Suite {t_suite}{t_suffix}) by {st.session_state.analyst_name} on {st.session_state.test_date}."
             )
         else:
-            # Dual BSC Scenario
             st.session_state.equipment_summary = (
                 f"The cleanroom used for testing (E00{t_room}) consists of three interconnected sections: the innermost ISO 7 cleanroom ({t_suite}B), "
                 f"which opens into the middle ISO 7 buffer room ({t_suite}A), and then into the outermost ISO 8 anteroom ({t_suite}). "
@@ -316,9 +369,11 @@ if st.session_state.active_platform == "ScanRDI":
                 org_verb = "organisms identified included" if ("," in org_id or "AND" in org_id.upper()) else "organism identified was"
                 details_list.append(f"However, microbial {growth_term} observed in {category} the week of testing. Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} {etx}. The {org_verb} {org_id}.")
             st.session_state.em_details = "\n\n".join(details_list)
+        
+        # Save state automatically after generation logic
+        save_current_state()
         st.rerun()
 
-    # st.session_state.equipment_summary = st.text_area("Equipment Summary (Editable)", value=st.session_state.equipment_summary, height=200)
     st.session_state.sample_history_paragraph = st.text_area("Sample History (Full Paragraph Editable)", value=st.session_state.sample_history_paragraph, height=100)
     st.session_state.narrative_summary = st.text_area("Narrative Summary (Editable)", value=st.session_state.narrative_summary, height=120)
     st.session_state.em_details = st.text_area("EM Growth Details (Editable)", value=st.session_state.em_details, height=150)
@@ -332,7 +387,6 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         final_data["oos_full"] = f"OOS-{st.session_state.oos_id}"
         
         if st.session_state.active_platform == "ScanRDI":
-            # Map Room Logic
             t_room, t_suite, t_suffix, t_loc = get_room_logic(st.session_state.bsc_id)
             final_data["cr_suit"] = t_suite
             final_data["cr_id"] = t_room
@@ -349,17 +403,14 @@ if st.button("🚀 GENERATE FINAL REPORT"):
             final_data["changeover_name"] = st.session_state.changeover_name
             final_data["analyst_name"] = st.session_state.analyst_name
             
-            # Map Controls
             final_data["control_positive"] = st.session_state.control_pos
             final_data["control_data"] = st.session_state.control_exp
             
-            # Map Organism Morphology (FIXED)
             if st.session_state.org_choice == "Other":
                 final_data["organism_morphology"] = st.session_state.manual_org
             else:
                 final_data["organism_morphology"] = st.session_state.org_choice
 
-            # Map EM Table Variables to Template Tags
             final_data["obs_pers_dur"] = st.session_state.obs_pers
             final_data["etx_pers_dur"] = st.session_state.etx_pers
             final_data["id_pers_dur"] = st.session_state.id_pers
@@ -393,5 +444,11 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         doc.render(final_data)
         out_name = f"OOS-{st.session_state.oos_id} {st.session_state.client_name} ({st.session_state.sample_id}) - {st.session_state.active_platform}.docx"
         doc.save(out_name)
+        
+        # Save state one final time on generation
+        save_current_state()
+        
         with open(out_name, "rb") as f:
             st.download_button("📂 Download Document", f, file_name=out_name)
+
+```
