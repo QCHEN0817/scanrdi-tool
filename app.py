@@ -51,7 +51,13 @@ field_keys = [
 ]
 
 for k in field_keys:
-    init_state(k, "N/A" if "etx" in k or "id" in k else (0 if k == "incidence_count" else ""))
+    # incidence_count must be an integer to avoid ValueError in number_input
+    if k == "incidence_count":
+        init_state(k, 0)
+    elif "etx" in k or "id" in k:
+        init_state(k, "N/A")
+    else:
+        init_state(k, "")
 
 # --- EMAIL PARSER LOGIC ---
 def parse_email_text(text):
@@ -127,21 +133,20 @@ if st.session_state.active_platform == "ScanRDI":
     p1, p2, p3, p4 = st.columns(4)
     with p1:
         st.session_state.prepper_initial = st.text_input("Prepper Initials", st.session_state.prepper_initial).upper()
-        # Ensure the name is updated in session state whenever the initial is checked
-        auto_prepper = get_full_name(st.session_state.prepper_initial)
-        st.session_state.prepper_name = st.text_input("Prepper Full Name", value=st.session_state.prepper_name if st.session_state.prepper_name else auto_prepper)
+        pre_full = get_full_name(st.session_state.prepper_initial)
+        st.session_state.prepper_name = st.text_input("Prepper Full Name", value=st.session_state.prepper_name if st.session_state.prepper_name else pre_full)
     with p2:
         st.session_state.analyst_initial = st.text_input("Processor Initials", st.session_state.analyst_initial).upper()
-        auto_analyst = get_full_name(st.session_state.analyst_initial)
-        st.session_state.analyst_name = st.text_input("Processor Full Name", value=st.session_state.analyst_name if st.session_state.analyst_name else auto_analyst)
+        ana_full = get_full_name(st.session_state.analyst_initial)
+        st.session_state.analyst_name = st.text_input("Processor Full Name", value=st.session_state.analyst_name if st.session_state.analyst_name else ana_full)
     with p3:
         st.session_state.changeover_initial = st.text_input("Changeover Initials", st.session_state.changeover_initial).upper()
-        auto_chg = get_full_name(st.session_state.changeover_initial)
-        st.session_state.changeover_name = st.text_input("Changeover Full Name", value=st.session_state.changeover_name if st.session_state.changeover_name else auto_chg)
+        chg_full = get_full_name(st.session_state.changeover_initial)
+        st.session_state.changeover_name = st.text_input("Changeover Full Name", value=st.session_state.changeover_name if st.session_state.changeover_name else chg_full)
     with p4:
         st.session_state.reader_initial = st.text_input("Reader Initials", st.session_state.reader_initial).upper()
-        auto_reader = get_full_name(st.session_state.reader_initial)
-        st.session_state.reader_name = st.text_input("Reader Full Name", value=st.session_state.reader_name if st.session_state.reader_name else auto_reader)
+        rea_full = get_full_name(st.session_state.reader_initial)
+        st.session_state.reader_name = st.text_input("Reader Full Name", value=st.session_state.reader_name if st.session_state.reader_name else rea_full)
 
     def get_room_logic(bsc_id):
         try:
@@ -187,7 +192,7 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.control_lot = st.text_input("Control Lot", st.session_state.control_lot)
         st.session_state.control_exp = st.text_input("Control Exp Date", st.session_state.control_exp)
 
-    st.subheader("Table 1: EM Observations")
+    st.header("4. EM Observations")
     em1, em2, em3 = st.columns(3)
     with em1:
         st.session_state.obs_pers = st.text_input("Personnel Obs", st.session_state.obs_pers)
@@ -215,10 +220,15 @@ if st.session_state.active_platform == "ScanRDI":
         st.session_state.id_room_weekly = st.text_input("Weekly Surf ID", st.session_state.id_room_weekly)
         st.session_state.date_weekly = st.text_input("Date of Weekly Monitoring", st.session_state.date_weekly)
 
-    st.header("4. Automated Summaries")
+    st.header("5. Automated Summaries")
     h1, h2 = st.columns(2)
     with h1:
-        st.session_state.incidence_count = st.number_input("Number of Prior Failures", value=int(st.session_state.incidence_count), min_value=0, step=1)
+        # Safety check for integer conversion to prevent ValueError
+        try: 
+            curr_val = int(st.session_state.incidence_count)
+        except: 
+            curr_val = 0
+        st.session_state.incidence_count = st.number_input("Number of Prior Failures", value=curr_val, min_value=0, step=1)
     with h2:
         st.session_state.oos_refs = st.text_input("Related OOS Numbers", st.session_state.oos_refs)
 
@@ -233,7 +243,6 @@ if st.session_state.active_platform == "ScanRDI":
             hist_phrase = f"has had 1 incidence of a positive result (OOS-{st.session_state.oos_refs})"
         else:
             hist_phrase = f"has had {st.session_state.incidence_count} incidences of positive results (OOS-{st.session_state.oos_refs})"
-        
         st.session_state.sample_history_para = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” {hist_phrase} using the Scan RDI method during this period."
 
         # 3. Narrative/EM Logic
@@ -250,7 +259,6 @@ if st.session_state.active_platform == "ScanRDI":
         else:
             em_clean = [p for p, obs in [("personal sampling (left touch and right touch)", st.session_state.obs_pers), ("surface sampling", st.session_state.obs_surf), ("settling plates", st.session_state.obs_sett)] if not obs.strip()]
             wk_clean = [p for p, obs in [("weekly active air sampling", st.session_state.obs_air), ("weekly surface sampling", st.session_state.obs_room)] if not obs.strip()]
-
             summary_text = "Upon analyzing the environmental monitoring results, "
             if em_clean:
                 summary_text += "no microbial growth was observed in " + ", ".join(em_clean[:-1]) + (", and " if len(em_clean) > 1 else "") + em_clean[-1] + ". "
@@ -260,10 +268,8 @@ if st.session_state.active_platform == "ScanRDI":
 
             details_list = []
             for category, obs, etx, org_id in growth_sources:
-                obs_up = obs.upper()
-                is_sing_count = ("1" in obs and "CFU" in obs_up and "11" not in obs and "21" not in obs)
-                growth_term = "growth was" if is_sing_count else "growths were"
-                plate_term = "plate was" if is_sing_count else "plates were"
+                is_sing = ("1" in obs and "CFU" in obs.upper() and "11" not in obs and "21" not in obs)
+                growth_term, plate_term = ("growth was", "plate was") if is_sing else ("growths were", "plates were")
                 id_label = "sample IDs" if ("," in etx or "AND" in etx.upper()) else "sample ID"
                 org_verb = "organisms identified included" if ("," in org_id or "AND" in org_id.upper()) else "organism identified was"
                 details_list.append(f"However, microbial {growth_term} observed in {category} the week of testing. Specifically, {obs}. The {plate_term} submitted for microbial identification under {id_label} {etx}. The {org_verb} {org_id}.")
@@ -279,16 +285,9 @@ if st.button("🚀 GENERATE FINAL REPORT"):
     template_name = f"{st.session_state.active_platform} OOS template.docx"
     if os.path.exists(template_name):
         doc = DocxTemplate(template_name)
-        # Final explicit sync of names into the dictionary for the docxtpl renderer
         final_data = {k: v for k, v in st.session_state.items()}
-        
-        # Mapping names specifically to ensure templates get the Full Name
-        final_data["prepper_name"] = st.session_state.prepper_name
-        final_data["analyst_name"] = st.session_state.analyst_name
-        final_data["changeover_name"] = st.session_state.changeover_name
-        final_data["reader_name"] = st.session_state.reader_name
         final_data["oos_full"] = f"OOS-{st.session_state.oos_id}"
-
+        # Set "No Growth" for table display if blank
         for key in ["obs_pers", "obs_surf", "obs_sett", "obs_air", "obs_room"]:
             if not final_data[key].strip(): final_data[key] = "No Growth"
         try:
