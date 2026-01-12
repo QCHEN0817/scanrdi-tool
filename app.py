@@ -13,7 +13,7 @@ st.markdown("""
     <style>
     .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #f0f2f6; }
     .main { background-color: #ffffff; }
-    .stTextArea textarea { background-color: #f8f9fa; color: #31333F; }
+    .stTextArea textarea { background-color: #ffffff; color: #31333F; border: 1px solid #d6d6d6; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -106,7 +106,7 @@ def get_room_logic(bsc_id):
 
 # --- GENERATE LIVE TEXTS ---
 def generate_live_texts():
-    # 1. Equipment
+    # 1. Equipment Summary
     t_room, t_suite, t_suffix, t_loc = get_room_logic(st.session_state.bsc_id)
     c_room, c_suite, c_suffix, c_loc = get_room_logic(st.session_state.chgbsc_id)
     
@@ -130,7 +130,7 @@ def generate_live_texts():
     else: hist_phrase = f"{st.session_state.incidence_count} incidents ({st.session_state.oos_refs})"
     hist_text = f"Analyzing a 6-month sample history for {st.session_state.client_name}, this specific analyte “{st.session_state.sample_name}” has had {hist_phrase} using the Scan RDI method during this period."
 
-    # 3. Cross Contam
+    # 3. Cross Contamination
     if st.session_state.other_positives == "No":
         cc_text = "All other samples processed by the analyst and other analysts that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
     else:
@@ -144,6 +144,7 @@ def generate_live_texts():
             if oid:
                 other_list_ids.append(oid)
                 detail_sentences.append(f"{oid} was the {oord_text} sample processed")
+        
         all_ids = other_list_ids + [st.session_state.sample_id]
         if len(all_ids) == 2: ids_str = f"{all_ids[0]} and {all_ids[1]}"
         else: ids_str = ", ".join(all_ids[:-1]) + ", and " + all_ids[-1]
@@ -385,8 +386,8 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.incidence_count = 0
             st.session_state.oos_refs = ""
     with c2:
-        st.subheader("Generated History Text")
-        st.text_area("Live Preview (Read Only)", value=hist_txt, height=150, disabled=True)
+        st.subheader("Generated History Text (Editable)")
+        st.session_state.sample_history_paragraph = st.text_area("History Text", value=hist_txt, height=150, disabled=False, key="hist_editable")
 
     st.divider()
 
@@ -419,18 +420,16 @@ if st.session_state.active_platform == "ScanRDI":
                     except: saved_order = 1
                     st.session_state[key_order] = st.number_input(f"Other Sample #{i+1} Order", key=f"input_order_{i}", value=max(1, saved_order), step=1)
     with c2:
-        st.subheader("Generated Cross-Contam Text")
-        st.text_area("Live Preview (Read Only)", value=cc_txt, height=350, disabled=True)
+        st.subheader("Generated Cross-Contam Text (Editable)")
+        st.session_state.cross_contamination_summary = st.text_area("Cross-Contam Text", value=cc_txt, height=350, disabled=False, key="cc_editable")
 
     st.divider()
 
-    # 3. Narrative & EM (Restored)
+    # 3. Narrative & EM (Restored & Editable)
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("EM Findings Summary")
-        st.caption("Inputs from Section 4 (EM Observations)")
+        st.subheader("EM Findings Summary (Inputs)")
         
-        # Display a quick read-only summary of findings so user can see why text says what it says
         em_findings = []
         if st.session_state.obs_pers.strip(): em_findings.append(f"🔴 Personnel: {st.session_state.obs_pers}")
         else: em_findings.append("✅ Personnel: No Growth")
@@ -451,9 +450,13 @@ if st.session_state.active_platform == "ScanRDI":
             st.text(f)
 
     with c2:
-        st.subheader("Generated Narrative & EM Details")
-        st.text_area("Narrative Summary (Live)", value=narr_txt, height=120, disabled=True)
-        st.text_area("EM Details (Live)", value=em_txt, height=200, disabled=True)
+        st.subheader("Generated Narrative & EM Details (Editable)")
+        st.session_state.narrative_summary = st.text_area("Narrative Summary", value=narr_txt, height=120, disabled=False, key="narr_editable")
+        st.session_state.em_details = st.text_area("EM Details", value=em_txt, height=200, disabled=False, key="em_editable")
+
+    st.divider()
+    st.subheader("Equipment Summary (Editable)")
+    st.session_state.equipment_summary = st.text_area("Equipment Summary", value=equip_txt, height=200, disabled=False, key="equip_editable")
 
     save_current_state()
 
