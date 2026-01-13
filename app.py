@@ -40,6 +40,7 @@ field_keys = [
     "total_pos_count_num", "current_pos_order",
     "diff_changeover_bsc", "has_prior_failures",
     "em_growth_observed", "diff_changeover_analyst",
+    "diff_reader_analyst",
     "em_growth_count" 
 ]
 # Dynamic keys
@@ -304,6 +305,7 @@ for k in field_keys:
     elif k == "has_prior_failures": init_state(k, "No")
     elif k == "em_growth_observed": init_state(k, "No")
     elif k == "diff_changeover_analyst": init_state(k, "No")
+    elif k == "diff_reader_analyst": init_state(k, "No") 
     elif k == "em_growth_count": init_state(k, 1) 
     elif k.startswith("other_order_"): init_state(k, 1)
     else: init_state(k, "")
@@ -384,7 +386,7 @@ with col3:
 # --- SECTION 2 ---
 if st.session_state.active_platform == "ScanRDI":
     st.header("2. Personnel")
-    p1, p2, p3 = st.columns(3)
+    p1, p2 = st.columns(2)
     with p1:
         st.text_input("Prepper Initials", key="prepper_initial")
         if st.session_state.prepper_initial and not st.session_state.prepper_name:
@@ -395,24 +397,30 @@ if st.session_state.active_platform == "ScanRDI":
         if st.session_state.analyst_initial and not st.session_state.analyst_name:
             st.session_state.analyst_name = get_full_name(st.session_state.analyst_initial)
         st.text_input("Processor Full Name", key="analyst_name")
-    with p3:
-        st.text_input("Reader Initials", key="reader_initial")
-        if st.session_state.reader_initial and not st.session_state.reader_name:
-            st.session_state.reader_name = get_full_name(st.session_state.reader_initial)
-        st.text_input("Reader Full Name", key="reader_name")
 
+    # READER LOGIC (NEW)
+    st.session_state.diff_reader_analyst = st.radio("Was the Reading performed by a different analyst?", ["No", "Yes"], index=0 if st.session_state.diff_reader_analyst == "No" else 1, horizontal=True)
+    if st.session_state.diff_reader_analyst == "Yes":
+        c1, c2 = st.columns(2)
+        with c1: st.text_input("Reader Initials", key="reader_initial")
+        with c2: 
+            if st.session_state.reader_initial and not st.session_state.reader_name:
+                st.session_state.reader_name = get_full_name(st.session_state.reader_initial)
+            st.text_input("Reader Full Name", key="reader_name")
+    else:
+        st.session_state.reader_initial = st.session_state.analyst_initial
+        st.session_state.reader_name = st.session_state.analyst_name
+
+    # CHANGEOVER LOGIC
     st.session_state.diff_changeover_analyst = st.radio("Was the Changeover performed by a different analyst?", ["No", "Yes"], index=0 if st.session_state.diff_changeover_analyst == "No" else 1, horizontal=True)
-    
     if st.session_state.diff_changeover_analyst == "Yes":
         c1, c2 = st.columns(2)
-        with c1:
-            st.text_input("Changeover Initials", key="changeover_initial")
-        with c2:
+        with c1: st.text_input("Changeover Initials", key="changeover_initial")
+        with c2: 
             if st.session_state.changeover_initial and not st.session_state.changeover_name:
                 st.session_state.changeover_name = get_full_name(st.session_state.changeover_initial)
             st.text_input("Changeover Full Name", key="changeover_name")
     else:
-        # Auto-sync
         st.session_state.changeover_initial = st.session_state.analyst_initial
         st.session_state.changeover_name = st.session_state.analyst_name
 
@@ -452,7 +460,7 @@ if st.session_state.active_platform == "ScanRDI":
         st.text_input("Control Lot", key="control_lot")
         st.text_input("Control Exp Date", key="control_exp")
 
-    # --- SECTION 4: EM OBSERVATIONS (REBUILT) ---
+    # --- SECTION 4: EM OBSERVATIONS ---
     st.header("4. EM Observations")
     
     st.radio("Was microbial growth observed in Environmental Monitoring?", ["No", "Yes"], key="em_growth_observed", horizontal=True)
@@ -489,16 +497,13 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.narrative_summary = n
             st.session_state.em_details = d
             
-            # --- AUTO-MAP BACK TO STATIC VARIABLES FOR TEMPLATE ---
-            # This ensures the Word template (which expects keys like obs_pers) still works!
-            # We reset them first
+            # Reset
             st.session_state.obs_pers = ""; st.session_state.etx_pers = ""; st.session_state.id_pers = ""
             st.session_state.obs_surf = ""; st.session_state.etx_surf = ""; st.session_state.id_surf = ""
             st.session_state.obs_sett = ""; st.session_state.etx_sett = ""; st.session_state.id_sett = ""
             st.session_state.obs_air = ""; st.session_state.etx_air_weekly = ""; st.session_state.id_air_weekly = ""
             st.session_state.obs_room = ""; st.session_state.etx_room_weekly = ""; st.session_state.id_room_wk_of = ""
             
-            # Helper to join if multiple
             def join_val(old, new): return f"{old}, {new}" if old else new
             
             for f in failures:
@@ -531,7 +536,6 @@ if st.session_state.active_platform == "ScanRDI":
         st.subheader("EM Growth Details (Editable)")
         st.text_area("Details Content", key="em_details", height=200, label_visibility="collapsed")
     else:
-        # Default No Growth Logic
         st.session_state.narrative_summary = "Upon analyzing the environmental monitoring results, no microbial growth was observed in personal sampling (left touch and right touch), surface sampling, and settling plates. Additionally, weekly active air sampling and weekly surface sampling showed no microbial growth."
         st.session_state.em_details = ""
 
@@ -629,7 +633,7 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         final_data["obs_pers_dur"] = st.session_state.obs_pers; final_data["etx_pers_dur"] = st.session_state.etx_pers; final_data["id_pers_dur"] = st.session_state.id_pers
         final_data["obs_surf_dur"] = st.session_state.obs_surf; final_data["etx_surf_dur"] = st.session_state.etx_surf; final_data["id_surf_dur"] = st.session_state.id_surf
         final_data["obs_sett_dur"] = st.session_state.obs_sett; final_data["etx_sett_dur"] = st.session_state.etx_sett; final_data["id_sett_dur"] = st.session_state.id_sett
-        final_data["obs_air_wk_of"] = st.session_state.obs_air; final_data["etx_air_wk_of"] = st.session_state.etx_air_weekly; final_data["id_air_wk_of"] = st.session_state.id_air_wk_of
+        final_data["obs_air_wk_of"] = st.session_state.obs_air; final_data["etx_air_wk_of"] = st.session_state.etx_air_weekly; final_data["id_air_wk_of"] = st.session_state.id_air_weekly
         final_data["obs_room_wk_of"] = st.session_state.obs_room; final_data["etx_room_wk_of"] = st.session_state.etx_room_weekly; final_data["id_room_wk_of"] = st.session_state.id_room_wk_of
         final_data["weekly_initial"] = st.session_state.weekly_init; final_data["date_of_weekly"] = st.session_state.date_weekly
 
