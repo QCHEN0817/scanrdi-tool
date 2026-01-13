@@ -323,12 +323,12 @@ def parse_email_text(text):
     sample_match = re.search(r"Sample\s*Name:\s*(.*)", text, re.IGNORECASE)
     if sample_match: st.session_state.sample_name = sample_match.group(1).strip()
     
-    # LOT NUMBER (Fixed to capture full line including special chars)
-    lot_match = re.search(r"Lot:\s*(.+)", text, re.IGNORECASE)
+    # LOT NUMBER FIX: Greedily capture everything on the line (ignoring newline chars)
+    lot_match = re.search(r"Lot:\s*([^\n\r]+)", text, re.IGNORECASE)
     if lot_match: st.session_state.lot_number = lot_match.group(1).strip()
     
-    # MORPHOLOGY (New)
-    morph_match = re.search(r"exhibiting\s+[\W]*(\w+)[\W]*-shaped\s+morphology", text, re.IGNORECASE)
+    # MORPHOLOGY PARSER
+    morph_match = re.search(r"exhibiting\s*[\W]*\s*(\w+)\s*[\W]*-shaped\s*morphology", text, re.IGNORECASE)
     if morph_match:
         shape = morph_match.group(1).lower()
         if "cocci" in shape: st.session_state.org_choice = "cocci"
@@ -587,12 +587,14 @@ if st.session_state.active_platform == "ScanRDI":
 # --- FINAL GENERATION ---
 st.divider()
 if st.button("🚀 GENERATE FINAL REPORT"):
+    # Generate background texts
     st.session_state.equipment_summary = generate_equipment_text()
     
     if st.session_state.em_growth_observed == "No":
         n, d, _ = generate_narrative_and_details()
         st.session_state.narrative_summary = n
         st.session_state.em_details = d
+        # Clear static fields if No growth to prevent old data sticking
         st.session_state.obs_pers = ""; st.session_state.etx_pers = ""; st.session_state.id_pers = ""
         st.session_state.obs_surf = ""; st.session_state.etx_surf = ""; st.session_state.id_surf = ""
         st.session_state.obs_sett = ""; st.session_state.etx_sett = ""; st.session_state.id_sett = ""
