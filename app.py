@@ -39,12 +39,19 @@ field_keys = [
     "other_positives", "cross_contamination_summary",
     "total_pos_count_num", "current_pos_order",
     "diff_changeover_bsc", "has_prior_failures",
-    "em_growth_observed", "diff_changeover_analyst"
+    "em_growth_observed", "diff_changeover_analyst",
+    "em_growth_count" # New key for EM count
 ]
-for i in range(10):
+# Dynamic keys
+for i in range(20): # increased range to be safe
     field_keys.append(f"other_id_{i}")
     field_keys.append(f"other_order_{i}")
     field_keys.append(f"prior_oos_{i}")
+    # New Dynamic EM keys
+    field_keys.append(f"em_cat_{i}")
+    field_keys.append(f"em_obs_{i}")
+    field_keys.append(f"em_etx_{i}")
+    field_keys.append(f"em_id_{i}")
 
 def load_saved_state():
     if os.path.exists(STATE_FILE):
@@ -172,7 +179,6 @@ def generate_cross_contam_text():
                 detail_sentences.append(f"{oid} was the {oord_text} sample processed")
         
         all_ids = other_list_ids + [st.session_state.sample_id]
-        
         if not all_ids: ids_str = ""
         elif len(all_ids) == 1: ids_str = all_ids[0]
         elif len(all_ids) == 2: ids_str = f"{all_ids[0]} and {all_ids[1]}"
@@ -188,28 +194,46 @@ def generate_cross_contam_text():
         return f"{ids_str} were the {count_word} samples tested positive for microbial growth. The analyst confirmed that these samples were not processed concurrently, sequentially, or within the same manifold run. Specifically, {details_str}. The analyst also verified that gloves were thoroughly disinfected between samples. Furthermore, all other samples processed by the analyst that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
 
 def generate_narrative_and_details():
-    # 1. Identify Failures
+    # 1. Identify Failures FROM DYNAMIC FIELDS
     failures = []
-    if st.session_state.obs_pers.strip():
-        failures.append({"cat": "personnel sampling", "obs": st.session_state.obs_pers, "etx": st.session_state.etx_pers, "id": st.session_state.id_pers, "time": "daily"})
-    if st.session_state.obs_surf.strip():
-        failures.append({"cat": "surface sampling", "obs": st.session_state.obs_surf, "etx": st.session_state.etx_surf, "id": st.session_state.id_surf, "time": "daily"})
-    if st.session_state.obs_sett.strip():
-        failures.append({"cat": "settling plates", "obs": st.session_state.obs_sett, "etx": st.session_state.etx_sett, "id": st.session_state.id_sett, "time": "daily"})
-    if st.session_state.obs_air.strip():
-        failures.append({"cat": "weekly active air sampling", "obs": st.session_state.obs_air, "etx": st.session_state.etx_air_weekly, "id": st.session_state.id_air_weekly, "time": "weekly"})
-    if st.session_state.obs_room.strip():
-        failures.append({"cat": "weekly surface sampling", "obs": st.session_state.obs_room, "etx": st.session_state.etx_room_weekly, "id": st.session_state.id_room_wk_of, "time": "weekly"})
+    
+    # We must construct the failures list from the dynamic inputs now, NOT the static variables
+    # because the user is entering data via the dynamic UI.
+    count = st.session_state.get("em_growth_count", 1)
+    
+    # Map friendly names to internal keys
+    cat_map = {
+        "Personnel Obs": "personnel sampling",
+        "Surface Obs": "surface sampling",
+        "Settling Obs": "settling plates",
+        "Weekly Air Obs": "weekly active air sampling",
+        "Weekly Surf Obs": "weekly surface sampling"
+    }
+    
+    for i in range(count):
+        cat_friendly = st.session_state.get(f"em_cat_{i}", "Personnel Obs")
+        obs_val = st.session_state.get(f"em_obs_{i}", "")
+        etx_val = st.session_state.get(f"em_etx_{i}", "")
+        id_val = st.session_state.get(f"em_id_{i}", "")
+        
+        category = cat_map.get(cat_friendly, "personnel sampling")
+        
+        # Determine time context
+        if "weekly" in category: time_ctx = "weekly"
+        else: time_ctx = "daily"
+        
+        if obs_val.strip():
+            failures.append({"cat": category, "obs": obs_val, "etx": etx_val, "id": id_val, "time": time_ctx})
 
     # 2. Build "Pass" Narrative
-    pass_em_clean = []
-    if not st.session_state.obs_pers.strip(): pass_em_clean.append("personal sampling (left touch and right touch)")
-    if not st.session_state.obs_surf.strip(): pass_em_clean.append("surface sampling")
-    if not st.session_state.obs_sett.strip(): pass_em_clean.append("settling plates")
+    # Check which categories are NOT in failures
+    failed_cats = [f["cat"] for f in failures]
     
-    pass_wk_clean = []
-    if not st.session_state.obs_air.strip(): pass_wk_clean.append("weekly active air sampling")
-    if not st.session_state.obs_room.strip(): pass_wk_clean.append("weekly surface sampling")
+    all_daily = ["personnel sampling", "surface sampling", "settling plates"]
+    all_weekly = ["weekly active air sampling", "weekly surface sampling"]
+    
+    pass_em_clean = [c.replace("personnel sampling", "personal sampling (left touch and right touch)") for c in all_daily if c not in failed_cats]
+    pass_wk_clean = [c for c in all_weekly if c not in failed_cats]
 
     narr = "Upon analyzing the environmental monitoring results, "
     has_clean_daily = False
@@ -237,8 +261,8 @@ def generate_narrative_and_details():
     det = ""
     if failures:
         # Build Intro
-        daily_fails = [f["cat"] for f in failures if f['time'] == 'daily']
-        weekly_fails = [f["cat"] for f in failures if f['time'] == 'weekly']
+        daily_fails = sorted(list(set([f["cat"] for f in failures if f['time'] == 'daily'])))
+        weekly_fails = sorted(list(set([f["cat"] for f in failures if f['time'] == 'weekly'])))
         
         intro_parts = []
         if daily_fails:
@@ -261,10 +285,7 @@ def generate_narrative_and_details():
         # Build Details - SPLIT SENTENCES LOGIC
         detail_sentences = []
         for i, f in enumerate(failures):
-            # Base Sentence
             base_sentence = f"{f['obs']} was detected during {f['cat']} and was submitted for microbial identification under sample ID {f['etx']}, where the organism was identified as {f['id']}"
-            
-            # Transition Words
             if i == 0: full_sent = f"Specifically, {base_sentence}."
             elif i == 1: full_sent = f"Additionally, {base_sentence}."
             elif i == 2: full_sent = f"Furthermore, {base_sentence}."
@@ -273,7 +294,7 @@ def generate_narrative_and_details():
             
         det = f"{fail_intro} {' '.join(detail_sentences)}"
 
-    return narr, det
+    return narr, det, failures
 
 # --- INIT STATE ---
 def init_state(key, default_value=""):
@@ -291,6 +312,7 @@ for k in field_keys:
     elif k == "has_prior_failures": init_state(k, "No")
     elif k == "em_growth_observed": init_state(k, "No")
     elif k == "diff_changeover_analyst": init_state(k, "No")
+    elif k == "em_growth_count": init_state(k, 1) # FIXED TYPE ERROR
     elif k.startswith("other_order_"): init_state(k, 1)
     else: init_state(k, "")
 
@@ -425,37 +447,28 @@ if st.session_state.active_platform == "ScanRDI":
         st.text_input("Control Lot", key="control_lot")
         st.text_input("Control Exp Date", key="control_exp")
 
-    # --- SECTION 4: EM OBSERVATIONS ---
+    # --- SECTION 4: EM OBSERVATIONS (REBUILT) ---
     st.header("4. EM Observations")
     
     st.radio("Was microbial growth observed in Environmental Monitoring?", ["No", "Yes"], key="em_growth_observed", horizontal=True)
     
     if st.session_state.em_growth_observed == "Yes":
-        st.caption("Please enter the growth details:")
-        e1, e2, e3 = st.columns(3)
-        with e1:
-            st.text_input("Personnel Obs", key="obs_pers")
-            st.text_input("Pers ETX #", key="etx_pers")
-            st.text_input("Pers ID", key="id_pers")
-        with e2:
-            st.text_input("Surface Obs", key="obs_surf")
-            st.text_input("Surf ETX #", key="etx_surf")
-            st.text_input("Surf ID", key="id_surf")
-        with e3:
-            st.text_input("Settling Obs", key="obs_sett")
-            st.text_input("Sett ETX #", key="etx_sett")
-            st.text_input("Sett ID", key="id_sett")
+        if st.session_state.em_growth_count < 1: st.session_state.em_growth_count = 1
+        count = st.number_input("Number of EM Failures", min_value=1, step=1, key="em_growth_count")
         
-        st.subheader("Weekly Bracketing (Growth Observations)")
-        w1, w2 = st.columns(2)
-        with w1:
-            st.text_input("Weekly Air Obs", key="obs_air")
-            st.text_input("Weekly Air ETX #", key="etx_air_weekly")
-            st.text_input("Weekly Air ID", key="id_air_weekly")
-        with w2:
-            st.text_input("Weekly Surf Obs", key="obs_room")
-            st.text_input("Weekly Surf ETX #", key="etx_room_weekly")
-            st.text_input("Weekly Surf ID", key="id_room_wk_of")
+        cat_options = ["Personnel Obs", "Surface Obs", "Settling Obs", "Weekly Air Obs", "Weekly Surf Obs"]
+        
+        for i in range(count):
+            st.subheader(f"Growth #{i+1}")
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.selectbox(f"Category", cat_options, key=f"em_cat_{i}")
+            with c2:
+                st.text_input(f"Observation (e.g. 1 CFU...)", key=f"em_obs_{i}")
+            with c3:
+                st.text_input(f"ETX #", key=f"em_etx_{i}")
+            with c4:
+                st.text_input(f"Microbial ID", key=f"em_id_{i}")
     
     st.divider()
     st.caption("Weekly Bracketing (Date & Initials Required)")
@@ -467,9 +480,44 @@ if st.session_state.active_platform == "ScanRDI":
 
     if st.session_state.em_growth_observed == "Yes":
         if st.button("🔄 Generate Narrative & Details"):
-            n, d = generate_narrative_and_details()
+            n, d, failures = generate_narrative_and_details()
             st.session_state.narrative_summary = n
             st.session_state.em_details = d
+            
+            # --- AUTO-MAP BACK TO STATIC VARIABLES FOR TEMPLATE ---
+            # This ensures the Word template (which expects keys like obs_pers) still works!
+            # We reset them first
+            st.session_state.obs_pers = ""; st.session_state.etx_pers = ""; st.session_state.id_pers = ""
+            st.session_state.obs_surf = ""; st.session_state.etx_surf = ""; st.session_state.id_surf = ""
+            st.session_state.obs_sett = ""; st.session_state.etx_sett = ""; st.session_state.id_sett = ""
+            st.session_state.obs_air = ""; st.session_state.etx_air_weekly = ""; st.session_state.id_air_weekly = ""
+            st.session_state.obs_room = ""; st.session_state.etx_room_weekly = ""; st.session_state.id_room_wk_of = ""
+            
+            # Helper to join if multiple
+            def join_val(old, new): return f"{old}, {new}" if old else new
+            
+            for f in failures:
+                if f['cat'] == "personnel sampling":
+                    st.session_state.obs_pers = join_val(st.session_state.obs_pers, f['obs'])
+                    st.session_state.etx_pers = join_val(st.session_state.etx_pers, f['etx'])
+                    st.session_state.id_pers = join_val(st.session_state.id_pers, f['id'])
+                elif f['cat'] == "surface sampling":
+                    st.session_state.obs_surf = join_val(st.session_state.obs_surf, f['obs'])
+                    st.session_state.etx_surf = join_val(st.session_state.etx_surf, f['etx'])
+                    st.session_state.id_surf = join_val(st.session_state.id_surf, f['id'])
+                elif f['cat'] == "settling plates":
+                    st.session_state.obs_sett = join_val(st.session_state.obs_sett, f['obs'])
+                    st.session_state.etx_sett = join_val(st.session_state.etx_sett, f['etx'])
+                    st.session_state.id_sett = join_val(st.session_state.id_sett, f['id'])
+                elif f['cat'] == "weekly active air sampling":
+                    st.session_state.obs_air = join_val(st.session_state.obs_air, f['obs'])
+                    st.session_state.etx_air_weekly = join_val(st.session_state.etx_air_weekly, f['etx'])
+                    st.session_state.id_air_weekly = join_val(st.session_state.id_air_weekly, f['id'])
+                elif f['cat'] == "weekly surface sampling":
+                    st.session_state.obs_room = join_val(st.session_state.obs_room, f['obs'])
+                    st.session_state.etx_room_weekly = join_val(st.session_state.etx_room_weekly, f['etx'])
+                    st.session_state.id_room_wk_of = join_val(st.session_state.id_room_wk_of, f['id'])
+                    
             st.rerun()
 
         st.subheader("Narrative Summary (Editable)")
@@ -488,7 +536,6 @@ if st.session_state.active_platform == "ScanRDI":
     st.subheader("Sample History")
     st.radio("Were there any prior failures in the last 6 months?", ["No", "Yes"], key="has_prior_failures", horizontal=True)
     if st.session_state.has_prior_failures == "Yes":
-        # FIXED: Ensure incidence_count starts at 1
         if st.session_state.incidence_count < 1: st.session_state.incidence_count = 1
         count = st.number_input("Number of Prior Failures", min_value=1, step=1, key="incidence_count")
         
@@ -519,7 +566,6 @@ if st.session_state.active_platform == "ScanRDI":
             with sub_c1:
                 st.text_input(f"Other Sample #{i+1} ID", key=f"other_id_{i}")
             with sub_c2:
-                # Ensure default is 1
                 if f"other_order_{i}" not in st.session_state: st.session_state[f"other_order_{i}"] = 1
                 st.number_input(f"Other Sample #{i+1} Order", min_value=1, step=1, key=f"other_order_{i}")
         
@@ -536,12 +582,20 @@ if st.session_state.active_platform == "ScanRDI":
 # --- FINAL GENERATION ---
 st.divider()
 if st.button("🚀 GENERATE FINAL REPORT"):
+    # Generate background texts
     st.session_state.equipment_summary = generate_equipment_text()
     
     if st.session_state.em_growth_observed == "No":
-        n, d = generate_narrative_and_details()
+        n, d, _ = generate_narrative_and_details()
         st.session_state.narrative_summary = n
         st.session_state.em_details = d
+        # Clear static fields if No growth to prevent old data sticking
+        st.session_state.obs_pers = ""; st.session_state.etx_pers = ""; st.session_state.id_pers = ""
+        st.session_state.obs_surf = ""; st.session_state.etx_surf = ""; st.session_state.id_surf = ""
+        st.session_state.obs_sett = ""; st.session_state.etx_sett = ""; st.session_state.id_sett = ""
+        st.session_state.obs_air = ""; st.session_state.etx_air_weekly = ""; st.session_state.id_air_weekly = ""
+        st.session_state.obs_room = ""; st.session_state.etx_room_weekly = ""; st.session_state.id_room_wk_of = ""
+
     if st.session_state.has_prior_failures == "No":
         st.session_state.sample_history_paragraph = generate_history_text()
     if st.session_state.other_positives == "No":
