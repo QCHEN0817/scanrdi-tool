@@ -1,5 +1,6 @@
 import streamlit as st
 from docxtpl import DocxTemplate
+from pypdf import PdfReader, PdfWriter  # NEW LIBRARY
 import os
 import re
 import json
@@ -195,7 +196,6 @@ def generate_cross_contam_text():
         return f"{ids_str} were the {count_word} samples tested positive for microbial growth. The analyst confirmed that these samples were not processed concurrently, sequentially, or within the same manifold run. Specifically, {details_str}. The analyst also verified that gloves were thoroughly disinfected between samples. Furthermore, all other samples processed by the analyst that day tested negative. These findings suggest that cross-contamination between samples is highly unlikely."
 
 def generate_narrative_and_details():
-    # 1. Identify Failures FROM DYNAMIC FIELDS
     failures = []
     count = st.session_state.get("em_growth_count", 1)
     
@@ -220,7 +220,6 @@ def generate_narrative_and_details():
         if obs_val.strip():
             failures.append({"cat": category, "obs": obs_val, "etx": etx_val, "id": id_val, "time": time_ctx})
 
-    # 2. Build "Pass" Narrative
     failed_cats = [f["cat"] for f in failures]
     all_daily = ["personnel sampling", "surface sampling", "settling plates"]
     all_weekly = ["weekly active air sampling", "weekly surface sampling"]
@@ -250,10 +249,8 @@ def generate_narrative_and_details():
         elif not pass_em_clean:
              narr += f"However, {wk_str} showed no microbial growth."
 
-    # 3. Build "Fail" Narrative (Combined Paragraph)
     det = ""
     if failures:
-        # Build Intro
         daily_fails = sorted(list(set([f["cat"] for f in failures if f['time'] == 'daily'])))
         weekly_fails = sorted(list(set([f["cat"] for f in failures if f['time'] == 'weekly'])))
         
@@ -275,7 +272,6 @@ def generate_narrative_and_details():
         else:
             fail_intro = f"However, microbial growth was observed during {intro_parts[0]}."
         
-        # Build Details - SPLIT SENTENCES LOGIC
         detail_sentences = []
         for i, f in enumerate(failures):
             base_sentence = f"{f['obs']} was detected during {f['cat']} and was submitted for microbial identification under sample ID {f['etx']}, where the organism was identified as {f['id']}"
@@ -325,11 +321,9 @@ def parse_email_text(text):
     sample_match = re.search(r"Sample\s*Name:\s*(.*)", text, re.IGNORECASE)
     if sample_match: st.session_state.sample_name = sample_match.group(1).strip()
     
-    # LOT NUMBER FIX: Greedily capture everything on the line after 'Lot:'
     lot_match = re.search(r"(?:Lot|Batch)\s*[:\.]?\s*([^\n\r]+)", text, re.IGNORECASE)
     if lot_match: st.session_state.lot_number = lot_match.group(1).strip()
     
-    # MORPHOLOGY PARSER
     morph_match = re.search(r"exhibiting\s*[\W]*\s*(\w+)\s*[\W]*-shaped\s*morphology", text, re.IGNORECASE)
     if morph_match:
         shape = morph_match.group(1).lower()
@@ -398,7 +392,7 @@ if st.session_state.active_platform == "ScanRDI":
             st.session_state.analyst_name = get_full_name(st.session_state.analyst_initial)
         st.text_input("Processor Full Name", key="analyst_name")
 
-    # READER LOGIC (NEW)
+    # READER LOGIC
     st.session_state.diff_reader_analyst = st.radio("Was the Reading performed by a different analyst?", ["No", "Yes"], index=0 if st.session_state.diff_reader_analyst == "No" else 1, horizontal=True)
     if st.session_state.diff_reader_analyst == "Yes":
         c1, c2 = st.columns(2)
@@ -591,8 +585,45 @@ if st.session_state.active_platform == "ScanRDI":
 # --- FINAL GENERATION ---
 st.divider()
 if st.button("🚀 GENERATE FINAL REPORT"):
+    # Generate background texts
     st.session_state.equipment_summary = generate_equipment_text()
     
+    # Process PDF Form Filling if PDF Template exists
+    pdf_template = f"{st.session_state.active_platform} OOS template.pdf"
+    if os.path.exists(pdf_template):
+        reader = PdfReader(pdf_template)
+        writer = PdfWriter()
+        # Copy pages
+        for page in reader.pages:
+            writer.add_page(page)
+        
+        # Simple Key-Value Map (Assumes PDF field names = Streamlit keys)
+        # We need to flatten our data dictionary for PDF fields
+        pdf_data = {k: v for k, v in st.session_state.items() if k in field_keys}
+        
+        # Add generated texts
+        pdf_data["narrative_summary"] = st.session_state.narrative_summary
+        if st.session_state.em_growth_observed == "Yes":
+             pdf_data["narrative_summary"] += f"\n\n{st.session_state.em_details}"
+        
+        # Add equipment/history/cross-contam if not already present in keys
+        pdf_data["equipment_summary"] = st.session_state.equipment_summary
+        pdf_data["sample_history_paragraph"] = st.session_state.sample_history_paragraph
+        pdf_data["cross_contamination_summary"] = st.session_state.cross_contamination_summary
+
+        # Fill fields
+        writer.update_page_form_field_values(writer.pages[0], pdf_data)
+        
+        # Save
+        safe_oos = clean_filename(st.session_state.oos_id)
+        out_pdf = f"OOS-{safe_oos} {clean_filename(st.session_state.client_name)} - {st.session_state.active_platform}.pdf"
+        
+        with open(out_pdf, "wb") as output_stream:
+            writer.write(output_stream)
+            
+        with open(out_pdf, "rb") as pdf_file:
+            st.download_button(label="📂 Download PDF Report", data=pdf_file, file_name=out_pdf, mime="application/pdf")
+
     if st.session_state.em_growth_observed == "No":
         n, d, _ = generate_narrative_and_details()
         st.session_state.narrative_summary = n
