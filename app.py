@@ -323,8 +323,8 @@ def parse_email_text(text):
     sample_match = re.search(r"Sample\s*Name:\s*(.*)", text, re.IGNORECASE)
     if sample_match: st.session_state.sample_name = sample_match.group(1).strip()
     
-    # LOT NUMBER FIX: Greedily capture everything on the line (ignoring newline chars)
-    lot_match = re.search(r"Lot:\s*([^\n\r]+)", text, re.IGNORECASE)
+    # LOT NUMBER FIX: Greedily capture everything on the line after 'Lot:'
+    lot_match = re.search(r"(?:Lot|Batch)\s*[:\.]?\s*([^\n\r]+)", text, re.IGNORECASE)
     if lot_match: st.session_state.lot_number = lot_match.group(1).strip()
     
     # MORPHOLOGY PARSER
@@ -587,14 +587,12 @@ if st.session_state.active_platform == "ScanRDI":
 # --- FINAL GENERATION ---
 st.divider()
 if st.button("🚀 GENERATE FINAL REPORT"):
-    # Generate background texts
     st.session_state.equipment_summary = generate_equipment_text()
     
     if st.session_state.em_growth_observed == "No":
         n, d, _ = generate_narrative_and_details()
         st.session_state.narrative_summary = n
         st.session_state.em_details = d
-        # Clear static fields if No growth to prevent old data sticking
         st.session_state.obs_pers = ""; st.session_state.etx_pers = ""; st.session_state.id_pers = ""
         st.session_state.obs_surf = ""; st.session_state.etx_surf = ""; st.session_state.id_surf = ""
         st.session_state.obs_sett = ""; st.session_state.etx_sett = ""; st.session_state.id_sett = ""
@@ -631,7 +629,7 @@ if st.button("🚀 GENERATE FINAL REPORT"):
         final_data["obs_pers_dur"] = st.session_state.obs_pers; final_data["etx_pers_dur"] = st.session_state.etx_pers; final_data["id_pers_dur"] = st.session_state.id_pers
         final_data["obs_surf_dur"] = st.session_state.obs_surf; final_data["etx_surf_dur"] = st.session_state.etx_surf; final_data["id_surf_dur"] = st.session_state.id_surf
         final_data["obs_sett_dur"] = st.session_state.obs_sett; final_data["etx_sett_dur"] = st.session_state.etx_sett; final_data["id_sett_dur"] = st.session_state.id_sett
-        final_data["obs_air_wk_of"] = st.session_state.obs_air; final_data["etx_air_wk_of"] = st.session_state.etx_air_weekly; final_data["id_air_wk_of"] = st.session_state.id_air_weekly
+        final_data["obs_air_wk_of"] = st.session_state.obs_air; final_data["etx_air_wk_of"] = st.session_state.etx_air_weekly; final_data["id_air_wk_of"] = st.session_state.id_air_wk_of
         final_data["obs_room_wk_of"] = st.session_state.obs_room; final_data["etx_room_wk_of"] = st.session_state.etx_room_weekly; final_data["id_room_wk_of"] = st.session_state.id_room_wk_of
         final_data["weekly_initial"] = st.session_state.weekly_init; final_data["date_of_weekly"] = st.session_state.date_weekly
 
