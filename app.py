@@ -40,14 +40,13 @@ field_keys = [
     "total_pos_count_num", "current_pos_order",
     "diff_changeover_bsc", "has_prior_failures",
     "em_growth_observed", "diff_changeover_analyst",
-    "em_growth_count" # New key for EM count
+    "em_growth_count" 
 ]
 # Dynamic keys
-for i in range(20): # increased range to be safe
+for i in range(20):
     field_keys.append(f"other_id_{i}")
     field_keys.append(f"other_order_{i}")
     field_keys.append(f"prior_oos_{i}")
-    # New Dynamic EM keys
     field_keys.append(f"em_cat_{i}")
     field_keys.append(f"em_obs_{i}")
     field_keys.append(f"em_etx_{i}")
@@ -179,6 +178,7 @@ def generate_cross_contam_text():
                 detail_sentences.append(f"{oid} was the {oord_text} sample processed")
         
         all_ids = other_list_ids + [st.session_state.sample_id]
+        
         if not all_ids: ids_str = ""
         elif len(all_ids) == 1: ids_str = all_ids[0]
         elif len(all_ids) == 2: ids_str = f"{all_ids[0]} and {all_ids[1]}"
@@ -196,12 +196,8 @@ def generate_cross_contam_text():
 def generate_narrative_and_details():
     # 1. Identify Failures FROM DYNAMIC FIELDS
     failures = []
-    
-    # We must construct the failures list from the dynamic inputs now, NOT the static variables
-    # because the user is entering data via the dynamic UI.
     count = st.session_state.get("em_growth_count", 1)
     
-    # Map friendly names to internal keys
     cat_map = {
         "Personnel Obs": "personnel sampling",
         "Surface Obs": "surface sampling",
@@ -217,8 +213,6 @@ def generate_narrative_and_details():
         id_val = st.session_state.get(f"em_id_{i}", "")
         
         category = cat_map.get(cat_friendly, "personnel sampling")
-        
-        # Determine time context
         if "weekly" in category: time_ctx = "weekly"
         else: time_ctx = "daily"
         
@@ -226,9 +220,7 @@ def generate_narrative_and_details():
             failures.append({"cat": category, "obs": obs_val, "etx": etx_val, "id": id_val, "time": time_ctx})
 
     # 2. Build "Pass" Narrative
-    # Check which categories are NOT in failures
     failed_cats = [f["cat"] for f in failures]
-    
     all_daily = ["personnel sampling", "surface sampling", "settling plates"]
     all_weekly = ["weekly active air sampling", "weekly surface sampling"]
     
@@ -312,7 +304,7 @@ for k in field_keys:
     elif k == "has_prior_failures": init_state(k, "No")
     elif k == "em_growth_observed": init_state(k, "No")
     elif k == "diff_changeover_analyst": init_state(k, "No")
-    elif k == "em_growth_count": init_state(k, 1) # FIXED TYPE ERROR
+    elif k == "em_growth_count": init_state(k, 1) 
     elif k.startswith("other_order_"): init_state(k, 1)
     else: init_state(k, "")
 
@@ -330,8 +322,21 @@ def parse_email_text(text):
     if etx_id_match: st.session_state.sample_id = etx_id_match.group(1).strip()
     sample_match = re.search(r"Sample\s*Name:\s*(.*)", text, re.IGNORECASE)
     if sample_match: st.session_state.sample_name = sample_match.group(1).strip()
-    lot_match = re.search(r"Lot:\s*(\w+)", text, re.IGNORECASE)
+    
+    # LOT NUMBER (Fixed to capture full line including special chars)
+    lot_match = re.search(r"Lot:\s*(.+)", text, re.IGNORECASE)
     if lot_match: st.session_state.lot_number = lot_match.group(1).strip()
+    
+    # MORPHOLOGY (New)
+    morph_match = re.search(r"exhibiting\s+[\W]*(\w+)[\W]*-shaped\s+morphology", text, re.IGNORECASE)
+    if morph_match:
+        shape = morph_match.group(1).lower()
+        if "cocci" in shape: st.session_state.org_choice = "cocci"
+        elif "rod" in shape: st.session_state.org_choice = "rod"
+        else: 
+            st.session_state.org_choice = "Other"
+            st.session_state.manual_org = shape
+
     date_match = re.search(r"testing\s*on\s*(\d{2}\s*\w{3}\s*\d{4})", text, re.IGNORECASE)
     if date_match:
         try: d_obj = datetime.strptime(date_match.group(1).strip(), "%d %b %Y"); st.session_state.test_date = d_obj.strftime("%d%b%y")
@@ -582,14 +587,12 @@ if st.session_state.active_platform == "ScanRDI":
 # --- FINAL GENERATION ---
 st.divider()
 if st.button("🚀 GENERATE FINAL REPORT"):
-    # Generate background texts
     st.session_state.equipment_summary = generate_equipment_text()
     
     if st.session_state.em_growth_observed == "No":
         n, d, _ = generate_narrative_and_details()
         st.session_state.narrative_summary = n
         st.session_state.em_details = d
-        # Clear static fields if No growth to prevent old data sticking
         st.session_state.obs_pers = ""; st.session_state.etx_pers = ""; st.session_state.id_pers = ""
         st.session_state.obs_surf = ""; st.session_state.etx_surf = ""; st.session_state.id_surf = ""
         st.session_state.obs_sett = ""; st.session_state.etx_sett = ""; st.session_state.id_sett = ""
